@@ -1,0 +1,7 @@
+.token
+vm/.terraform*
+vm/terraform.tfstate*
+vm/outplan
+vars/*.pem
+vars/*.pem.pub
+images/
