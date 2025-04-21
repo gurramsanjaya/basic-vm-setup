@@ -4,40 +4,40 @@ umask 022
 DNSCRPT_VER=2.1.8
 
 function get_arch() {
-    case "$(uname -m)" in 
-        x86_64|amd64)
-            echo "x86_64"
-            ;;
-        i?86)
-            echo "i386"
-            ;;
-        arm64)
-            echo "arm64"
-            ;;
-        arm)
-            echo "arm"
-            ;;
-        *)
-            echo "Can't determine Architecture"
-            exit 1
-        esac
+  case "$(uname -m)" in
+    x86_64|amd64)
+      echo "x86_64"
+      ;;
+    i?86)
+      echo "i386"
+      ;;
+    arm64)
+      echo "arm64"
+      ;;
+    arm)
+      echo "arm"
+      ;;
+    *)
+      echo "Can't determine Architecture"
+      exit 1
+  esac
 }
 
 function download_and_setup_dnscrypt() {
-    local ARCH=$(get_arch)
-    local WRK_DIR="linux-${ARCH}"
+  local ARCH=$(get_arch)
+  local WRK_DIR="linux-${ARCH}"
 
-    mkdir -p /opt/dnscrypt-proxy/
-    pushd /opt/dnscrypt-proxy/
+  mkdir -p /opt/dnscrypt-proxy/
+  pushd /opt/dnscrypt-proxy/
 
-    TAR_FILE="dnscrypt-proxy-linux_${ARCH}-${DNSCRPT_VER}.tar.gz"
-    curl -sSLO "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/${DNSCRPT_VER}/${TAR_FILE}"
-    tar -xvf "$TAR_FILE"
-    
-    mv "${WRK_DIR}/example-dnscrypt-proxy.toml" "${WRK_DIR}/dnscrypt-proxy.toml"
-    # It determines the symlink source directory to resolve config toml path
-    ln -rs "${WRK_DIR}/dnscrypt-proxy" /usr/bin/
-    popd
+  TAR_FILE="dnscrypt-proxy-linux_${ARCH}-${DNSCRPT_VER}.tar.gz"
+  curl -sSLO "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/${DNSCRPT_VER}/${TAR_FILE}"
+  tar -xvf "$TAR_FILE"
+
+  mv "${WRK_DIR}/example-dnscrypt-proxy.toml" "${WRK_DIR}/dnscrypt-proxy.toml"
+  # It determines the symlink source directory to resolve config toml path
+  ln -rs "${WRK_DIR}/dnscrypt-proxy" /usr/bin/
+  popd
 }
 
 # get default network device

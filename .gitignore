@@ -1,7 +1,14 @@
 .token
-vm/.terraform*
-vm/terraform.tfstate*
+
+**/.terraform/*
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+
 vm/outplan
+
 vars/*.pem
 vars/*.pem.pub
+
 images/
