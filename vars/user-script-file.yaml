@@ -1,7 +1,6 @@
 #cloud-config-archive
 - type: "text/cloud-config"
   content: |
-    #cloud-config
     users:
       - name: test
         shell: /bin/bash
@@ -13,109 +12,15 @@
 
     packages:
       - wireguard
-      - nftables
 
-- type: "text/x-shellscript"
+# All the download stuff into boothook
+# Be careful, in some cases, resolv.conf is not yet setup before running boothooks. So curl may not work.
+- type: "text/cloud-boothook"
   content: |
     #!/bin/bash
 
     umask 022
-
-    # This won't work for redhat variants. For redhat Need to place this in /etc/sysconfig/nftables.conf or /etc/nftables/main.nft
-    cat > /etc/nftables.conf << EOF
-    #!/usr/sbin/nft -f
-
-    flush ruleset
-
-    define if_eth = eth0
-    define ssh_port = 22
-    define dns_port = 53
-    define wg_port = 59912
-
-    table netdev Ingress {
-        # I'm fairly sure conntrack is not established yet...
-        chain ingress {
-            type filter hook ingress device \$if_eth priority filter; policy accept;
-            ip saddr 127.0.0.1/8 iif != lo drop
-            ip6 saddr ::1/128 iif != lo drop
-            icmp type { echo-reply, destination-unreachable, time-exceeded, source-quench } accept
-            icmpv6 type { echo-reply, packet-too-big, time-exceeded, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, time-exceeded } accept
-            # drop all other icmp stuff
-            ip protocol icmp drop
-          ip6 nexthdr icmpv6 drop 
-        }
-    }
-
-    table inet Main {
-        
-        set bl_ipv4 {
-            type ipv4_addr;
-            size 1000;
-            flags dynamic, timeout;
-        }
-
-        chain prerouting {
-          type filter hook prerouting priority filter;
-          # RP Filter ipv6 equivalent for all ifs
-          meta nfproto ipv6 fib saddr . iif oif missing counter drop
-        }
-
-        chain output {
-            type filter hook output priority filter;
-            ct state invalid drop
-            # 6to4 address 
-            ip6 daddr { ::ffff:0.0.0.0/96, 2002::/24, 2002:a00::/24, 2002:7f00::/24, 2002:a9fe::/32, 2002:ac10::/28, 2002:c0a8::/32, 2002:e000::/19 } reject with icmpv6 addr-unreachable
-        }
-
-        chain forward {
-            type filter hook forward priority filter; policy drop;
-            ct state invalid drop
-            # Block all forwarded DNS requests. Only allow output DNS requests.
-            # Force the tunnel peers to point to the tunnel peer as the DNS server. 
-            meta l4proto { tcp, udp } th dport \$dns_port counter drop
-            # 6to4 address
-            ip6 daddr { ::/96, ::ffff:0.0.0.0/96, 2002::/24, 2002:a00::/24, 2002:7f00::/24, 2002:a9fe::/32, 2002:ac10::/28, 2002:c0a8::/32, 2002:e000::/19 } reject with icmpv6 addr-unreachable
-            ct state { established, related } accept
-            # Allow new internal stuff to be forwarded
-            iif != \$if_eth ct state new accept
-        }
-
-        chain input {
-            type filter hook input priority filter; policy drop;
-            
-            iif lo accept
-            # ingress is doing the work, l4proto doesnt work here
-            ip6 nexthdr icmpv6 accept
-            ip protocol icmp accept
-            
-            iif \$if_eth meta nfproto ipv4 tcp dport \$ssh_port meter ssh_ipv4 { ip saddr & 255.255.255.0 ct count over 3 } add @bl_ipv4 { ip saddr timeout 10m } counter drop
-            ip saddr @bl_ipv4 drop
-            # Don't forget to accept the ones that pass the previous check
-            iif \$if_eth meta nfproto ipv4 tcp dport \$ssh_port accept
-
-            jump input_extra
-
-            # Need to accept internal/tunnel dns requests
-            iif != \$if_eth meta l4proto { tcp, udp } th dport \$dns_port counter accept
-            
-            ct state { established, related } accept
-        }
-
-        chain input_extra {
-          iif \$if_eth udp dport \$wg_port accept
-        }
-
-    }
-    EOF
-    systemctl enable --now nftables.service
-
-- type: "text/x-shellscript"
-  content: |
-    #!/bin/bash
-    umask 022
-
-    # Basic dnscrpt-proxy setup. Change the toml/service later
-    VER=2.1.8
+    DNSCRPT_VER=2.1.8
 
     function get_arch() {
         case "$(uname -m)" in 
@@ -137,33 +42,53 @@
             esac
     }
 
-    function download_and_setup() {
-        ARCH=$(get_arch)
-        TAR_FILE="dnscrypt-proxy-linux_${ARCH}-${VER}.tar.gz"
-        curl -sSLO "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/${VER}/${TAR_FILE}"
+    function download_and_setup_dnscrypt() {
+        local ARCH=$(get_arch)
+        local WRK_DIR="linux-${ARCH}"
+
+        mkdir -p /opt/dnscrypt-proxy/
+        pushd /opt/dnscrypt-proxy/
+
+        TAR_FILE="dnscrypt-proxy-linux_${ARCH}-${DNSCRPT_VER}.tar.gz"
+        curl -sSLO "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/${DNSCRPT_VER}/${TAR_FILE}"
         tar -xvf "$TAR_FILE"
+        
+        mv "${WRK_DIR}/example-dnscrypt-proxy.toml" "${WRK_DIR}/dnscrypt-proxy.toml"
+        ln -rs "${WRK_DIR}/dnscrypt-proxy" /usr/bin/
+        popd
     }
 
+    # get default network device
+    export DEFAULT_INTERFACE=$(ip route get 9.9.9.9 | awk '{print $5}')
+
+    # Setup firewall, toggle the nftables service later
+    # This won't work for redhat variants. For redhat, place this in /etc/sysconfig/nftables.conf or /etc/nftables/main.nft
+    curl -sSL https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/refs/heads/main/vars/nftables.conf | envsubst '$DEFAULT_INTERFACE' > /etc/nftables.conf
+    nft -f /etc/nftables.conf
+
+    # Basic dnscrpt-proxy setup. Change the toml/service later
+    download_and_setup_dnscrypt
+
+# All the services stuff here
+- type: "text/x-shellscript"
+  content: |
+    #!/bin/bash
+
     function disable_systemd_resolved() {
-        # Disable systemd-resolved only after downloading the tar file
-        systemctl disable --now systemd-resolved.service
-        cat > /etc/resolv.conf << EOF
+      # TODO: Need to make this atomic using traps
+      systemctl disable --now systemd-resolved.service
+      cat > /etc/resolv.conf << EOF
     nameserver 127.0.0.1
     options edns0 trust-ad
     search .
     EOF
     }
-
-    mkdir -p /opt/dnscrypt/
-    cd /opt/dnscrypt/
-
-    download_and_setup
+      
+    systemctl enable --now nftables.service
+    
     disable_systemd_resolved
-
-    cd "linux-${ARCH}"
-    mv example-dnscrypt-proxy.toml dnscrypt-proxy.toml
-    ./dnscrypt-proxy -service install
-    ./dnscrypt-proxy -service start
-    ./dnscrypt-proxy -resolve google.com
+    dnscrypt-proxy -service install
+    dnscrypt-proxy -service start
+    dnscrypt-proxy -resolve google.com
 
 
