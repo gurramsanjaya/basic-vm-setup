@@ -8,7 +8,7 @@
         # TODO: perform all base config that needs root access in cloud-init itself.
         sudo: "ALL=(ALL) NOPASSWD:ALL"
         ssh_authorized_keys:
-          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINTSR/ZS16JJJktLE2KOftUuYsn4qOkpGcuorf325Xuh 
+          - ssh-ed25519 blahblahblahblah 
 
     packages:
       - wireguard
@@ -54,6 +54,7 @@
         tar -xvf "$TAR_FILE"
         
         mv "${WRK_DIR}/example-dnscrypt-proxy.toml" "${WRK_DIR}/dnscrypt-proxy.toml"
+        # It determines the symlink source directory to resolve config toml path
         ln -rs "${WRK_DIR}/dnscrypt-proxy" /usr/bin/
         popd
     }
@@ -89,6 +90,7 @@
     disable_systemd_resolved
     dnscrypt-proxy -service install
     dnscrypt-proxy -service start
+    sleep 5s
     dnscrypt-proxy -resolve google.com
 
 

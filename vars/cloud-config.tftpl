@@ -1,0 +1,11 @@
+packages:
+  - wireguard
+
+users:
+  - name: test
+    shell: /bin/bash
+    # bad idea giving root access as is
+    # TODO: perform all base config that needs root access in cloud-init itself.
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ${ssh_key}
