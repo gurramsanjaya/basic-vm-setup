@@ -40,8 +40,13 @@ function download_and_setup_dnscrypt() {
   popd
 }
 
-# get default network device
+# get default network device and set it to /etc/profile.d/ so its available for all users later
 export DEFAULT_INTERFACE=$(ip route get 9.9.9.9 | awk '{print $5}')
+
+mkdir -p /etc/profile.d/
+cat > /etc/profile.d/user_vars.sh << EOF
+export DEFAULT_INTERFACE=${DEFAULT_INTERFACE}
+EOF
 
 # Setup firewall, toggle the nftables service later
 # This won't work for redhat variants. For redhat, place this in /etc/sysconfig/nftables.conf or /etc/nftables/main.nft

@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+service WGExchange {
+  // Send Client publickey and recieve Client config
+  rpc AddClient(Credentials) returns (ClientConfig);
+}
+
+message ClientConfig {
+  repeated Address addresses = 1;
+  string dns = 2;
+  Peer peer = 3;
+}
+
+message Address {
+  string address = 1;
+  int32 mask = 2;
+}
+
+message Peer {
+  string endpoint = 1;
+  Credentials creds = 2;
+}
+
+message Credentials {
+  optional string presharedkey = 1;
+  string publickey = 2;
+}

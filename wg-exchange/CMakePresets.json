@@ -1,0 +1,27 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "debug",
+      "description": "Using gcc compiler here since clang debug builds fail at linking",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS_INIT": "-fsanitize=address -Wall -Wextra",
+        "CMAKE_C_FLAGS_INIT": "-fsanitize=address -Wall -Wextra"
+      }
+    },
+    {
+      "name": "release",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_LINKER_TYPE": "LLD",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS_INIT": "-Wall -Wextra",
+        "CMAKE_C_FLAGS_INIT": "-Wall -Wextra"
+      }
+    }
+  ]
+}
