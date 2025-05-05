@@ -13,7 +13,8 @@ if(GRPC_FETCHCONTENT)
     # v1.25.0, v1.26.0 etc..
     # For the purpose of testing, we override the tag used to the commit
     # that's currently under test.
-    GIT_TAG        v1.72.0)
+    GIT_TAG        v1.72.0
+    GIT_SHALLOW    TRUE)
   FetchContent_MakeAvailable(grpc)
 
   # Since FetchContent uses add_subdirectory under the hood, we can use

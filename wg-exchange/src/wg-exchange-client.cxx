@@ -10,43 +10,60 @@ using grpc::Channel;
 using grpc::CreateChannel;
 using grpc::experimental::TlsCredentials;
 using grpc::experimental::TlsChannelCredentialsOptions;
+using grpc::experimental::CertificateProviderInterface;
 using grpc::experimental::FileWatcherCertificateProvider;
 
 ABSL_FLAG(std::string, target, "127.0.0.1:59910", "Server exchange endpoint");
 ABSL_FLAG(bool, tls, false, "Toggle tls on");
-ABSL_FLAG(std::string, tls_private_key, "./tls/c_private.pem", "Private Key File Path");
-ABSL_FLAG(std::string, tls_cert, "./tls/c_cert.pem", "Certificate Key File Path");
+ABSL_FLAG(std::string, tls_cert, "./tls/c_cert.pem", "Root Cert File Path");
 
-class WGExchangeClient {
+class ClientHandler {
+  protected:
+    std::string tgt_;
+    std::shared_ptr<Channel> chan_ = nullptr;
+    std::shared_ptr<ChannelCredentials> creds_ = nullptr;
+    std::unique_ptr<WGExchange::Stub> stub_ = nullptr;
+    ClientHandler() {}
   public:
-    WGExchangeClient(std::shared_ptr<Channel> channel): stub_(WGExchange::NewStub(channel)) {
-
+    ClientHandler(std::string tgt): tgt_(std::move(tgt)), creds_(grpc::InsecureChannelCredentials()) {
+      chan_ = CreateChannel(tgt_, creds_);
+      stub_ = WGExchange::NewStub(chan_);
     }
-  private:
-    std::unique_ptr<WGExchange::Stub> stub_;
+    void addClient() {
+      grpc::ClientContext context;
+      Credentials request;
+      ClientConfig response;
+      stub_->addClient(&context, request, &response);
+      std::cout << response.DebugString() << '\n';
+    }
 };
 
-// Dangling references....
-std::shared_ptr<ChannelCredentials> getTlsChannelCredentials() {
-  std::string tls_private_key = absl::GetFlag(FLAGS_tls_private_key);
-  std::string tls_cert = absl::GetFlag(FLAGS_tls_cert);
-  TlsChannelCredentialsOptions options;
-  options.set_certificate_provider(std::make_shared<FileWatcherCertificateProvider>(tls_private_key, tls_cert, 60));
-  return grpc::experimental::TlsCredentials(options);
-}
-
+class TlsClientHandler: public ClientHandler {
+  protected:
+    std::string tls_cert_path_;
+    std::shared_ptr<CertificateProviderInterface> cert_prov_ = nullptr;
+    TlsChannelCredentialsOptions opt_;
+  public:
+    TlsClientHandler(std::string tgt, std::string tls_cert_path): tls_cert_path_(std::move(tls_cert_path)) {
+      tgt_ = std::move(tgt);
+      cert_prov_ = std::make_shared<FileWatcherCertificateProvider>(tls_cert_path_, 60);
+      opt_.set_certificate_provider(cert_prov_);
+      creds_ = TlsCredentials(opt_);
+      chan_ = CreateChannel(tgt_, creds_);
+      stub_ = WGExchange::NewStub(chan_);
+    }
+};
 
 int main(int argc, char** argv) {
   absl::SetProgramUsageMessage("");
   absl::ParseCommandLine(argc, argv);
   std::string target = absl::GetFlag(FLAGS_target);
-  std::shared_ptr<ChannelCredentials> creds = nullptr;
+  std::unique_ptr<ClientHandler> handler = nullptr;
   if(absl::GetFlag(FLAGS_tls)) {
-    creds = getTlsChannelCredentials();
+    handler = std::make_unique<TlsClientHandler>(target, absl::GetFlag(FLAGS_tls_cert));
   } else {
-    creds = grpc::InsecureChannelCredentials();
+    handler = std::make_unique<ClientHandler>(target);
   }
-  WGExchangeClient client{ CreateChannel(target, creds) };
-
+  handler->addClient();
   return 0;
 }

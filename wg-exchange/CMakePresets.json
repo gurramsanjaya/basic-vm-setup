@@ -2,25 +2,35 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "debug",
-      "description": "Using gcc compiler here since clang debug builds fail at linking",
-      "binaryDir": "${sourceDir}/build",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_FLAGS_INIT": "-fsanitize=address -Wall -Wextra",
-        "CMAKE_C_FLAGS_INIT": "-fsanitize=address -Wall -Wextra"
-      }
-    },
-    {
-      "name": "release",
+      "name": "base",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
         "CMAKE_C_COMPILER": "/usr/bin/clang",
         "CMAKE_LINKER_TYPE": "LLD",
+        "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "debug",
+      "inherits": ["base"],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        // "CMAKE_CXX_CLANG_TIDY": "clang-tidy;-checks=*",
+        "CMAKE_CXX_FLAGS_INIT": "-fsanitize=address -fclang-abi-compat=17 -Wall -Wextra",
+        "CMAKE_C_FLAGS_INIT": "-fsanitize=address -fclang-abi-compat=17 -Wall -Wextra",
+        "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "release",
+      "inherits": ["base"],
+      "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_CXX_FLAGS_INIT": "-Wall -Wextra",
-        "CMAKE_C_FLAGS_INIT": "-Wall -Wextra"
+        // "CMAKE_CXX_CLANG_TIDY": "clang-tidy;-checks=*",
+        "CMAKE_CXX_FLAGS_INIT": "-fclang-abi-compat=17 -Wall -Wextra -O3",
+        "CMAKE_C_FLAGS_INIT": "-fclang-abi-compat=17 -Wall -Wextra -O3",
+        "BUILD_TESTING": "OFF"
       }
     }
   ]

@@ -19,5 +19,6 @@ foreach(_target
     absl::log_initialize
     ${_REFLECTION}
     ${_GRPC_GRPCPP}
-    ${_PROTOBUF_LIBPROTOBUF})
+    ${_PROTOBUF_LIBPROTOBUF}
+    ${_DBUS_CXX})
 endforeach()
