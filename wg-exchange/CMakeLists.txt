@@ -11,6 +11,7 @@ find_package(Threads REQUIRED)
 find_package(gRPC REQUIRED)
 find_package(absl REQUIRED)
 find_package(dbus-cxx REQUIRED)
+# find_package(Boost REQUIRED)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 add_subdirectory("src")

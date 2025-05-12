@@ -5,10 +5,9 @@ set(PROTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/protos")
 
 add_subdirectory("generated")
 
-# add_executable(wg-exchange-server)
 foreach(_target
-  wg-exchange-client wg-exchange-server)
-  add_executable(${_target} "${_target}.cxx")
+  wg_exchange_client wg_exchange_server)
+  add_executable(${_target} "${_target}.cxx" "service_dbus_handle.cxx")
   target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
   target_link_libraries(${_target}
     wg_proto

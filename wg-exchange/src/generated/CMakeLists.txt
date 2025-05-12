@@ -26,7 +26,6 @@ add_library(wg_proto
   ${grpc_hdrs})
 
 target_link_libraries(wg_proto
-  absl::check
   ${_REFLECTION}
   ${_GRPC_GRPCPP}
   ${_PROTOBUF_LIBPROTOBUF})
