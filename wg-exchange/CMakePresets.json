@@ -17,6 +17,9 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         // "CMAKE_CXX_CLANG_TIDY": "clang-tidy;-checks=*",
+        // Be careful with Address Sanitization, the abi becomes different and doesn't match the linked gRPC library
+        // gRPC itself needs to be recompiled with Address Sanitize flags
+        // See https://github.com/grpc/grpc/issues/19224
         "CMAKE_CXX_FLAGS_INIT": "-fsanitize=address -fclang-abi-compat=17 -Wall -Wextra",
         "CMAKE_C_FLAGS_INIT": "-fsanitize=address -fclang-abi-compat=17 -Wall -Wextra",
         "BUILD_TESTING": "OFF"

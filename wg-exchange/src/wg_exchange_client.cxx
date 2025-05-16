@@ -35,7 +35,11 @@ class ClientHandler {
     Credentials request;
     ClientConfig response;
     stub_->addClient(&context, request, &response);
-    std::cout << response.DebugString() << '\n';
+    if (response.has_peer()) {
+      if (response.peer().has_creds() > 0) {
+        std::cout << response.peer().creds().pub_key() << '\n';
+      }
+    }
   }
 };
 
