@@ -11,7 +11,7 @@ message Address {
 }
 
 message Credentials {
-  bytes pre_shared_key = 1;
+  optional bytes pre_shared_key = 1;
   bytes pub_key = 2;
 }
 
