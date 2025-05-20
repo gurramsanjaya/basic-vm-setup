@@ -8,6 +8,7 @@
         "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
         "CMAKE_C_COMPILER": "/usr/bin/clang",
         "CMAKE_LINKER_TYPE": "LLD",
+        "CMAKE_GENERATOR": "Ninja",
         "BUILD_TESTING": "OFF"
       }
     },
@@ -31,8 +32,8 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         // "CMAKE_CXX_CLANG_TIDY": "clang-tidy;-checks=*",
-        "CMAKE_CXX_FLAGS_INIT": "-fclang-abi-compat=17 -Wall -Wextra -O3",
-        "CMAKE_C_FLAGS_INIT": "-fclang-abi-compat=17 -Wall -Wextra -O3",
+        "CMAKE_CXX_FLAGS_INIT": "-fclang-abi-compat=17 -Wall -Wextra",
+        "CMAKE_C_FLAGS_INIT": "-fclang-abi-compat=17 -Wall -Wextra",
         "BUILD_TESTING": "OFF"
       }
     }

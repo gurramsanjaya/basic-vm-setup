@@ -5,15 +5,14 @@ service WGExchange {
   rpc addClient(Credentials) returns (ClientConfig);
 }
 
-message ClientConfig {
-  repeated Address addr_list = 1;
-  string dns = 2;
-  Peer peer = 3;
-}
-
 message Address {
   string addr = 1;
   int32 mask = 2;
+}
+
+message Credentials {
+  bytes pre_shared_key = 1;
+  bytes pub_key = 2;
 }
 
 message Peer {
@@ -21,7 +20,8 @@ message Peer {
   Credentials creds = 2;
 }
 
-message Credentials {
-  optional bytes pre_shared_key = 1;
-  bytes pub_key = 2;
+message ClientConfig {
+  repeated Address addr_list = 1;
+  string dns = 2;
+  Peer peer = 3;
 }

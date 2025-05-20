@@ -71,11 +71,10 @@ class WGExchangeImpl final : public WGExchange::CallbackService {
 
     // uint8_t* pub_key = new uint8_t[WG_KEY_LEN];
     // Hacl_Curve25519_51_secret_to_public(pub_key, key);
-    // std::string stringified_pub_key{reinterpret_cast<char(*)>(pub_key),
-    //                                 WG_KEY_LEN};
+    // std::string str_pub_key{reinterpret_cast<char(*)>(pub_key), WG_KEY_LEN};
 
     // delete[] key;
-    // response->mutable_peer()->mutable_creds()->set_pub_key(stringified_pub_key);
+    // response->mutable_peer()->mutable_creds()->set_pub_key(str_pub_key);
 
     reactor->Finish(grpc::Status::OK);
     return reactor;

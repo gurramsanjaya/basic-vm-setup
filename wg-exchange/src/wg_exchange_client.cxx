@@ -4,6 +4,8 @@
 #include <generated/wg_exchange.grpc.pb.h>
 #include <grpcpp/create_channel.h>
 
+#include "wg_exchange.h"
+
 using grpc::Channel;
 using grpc::ChannelCredentials;
 using grpc::CreateChannel;
@@ -37,7 +39,14 @@ class ClientHandler {
     stub_->addClient(&context, request, &response);
     if (response.has_peer()) {
       if (response.peer().has_creds() > 0) {
-        std::cout << response.peer().creds().pub_key() << '\n';
+        const std::string str_pub_key{response.peer().creds().pub_key()};
+        // if(str_pub_key.length() == WG_KEY_LEN) {
+        //   const uint8_t* pub_key = reinterpret_cast<const uint8_t(*)>(str_pub_key.data());
+        //   char* base64_pub_key = new char[WG_KEY_LEN_BASE64];
+        //   key_to_base64(base64_pub_key, pub_key);
+        //   std::cout << base64_pub_key << '\n';
+        //   delete[] base64_pub_key;
+        // }
       }
     }
   }
