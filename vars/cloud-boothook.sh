@@ -35,6 +35,12 @@ function download_and_setup_dnscrypt() {
   tar -xvf "$TAR_FILE"
 
   mv "${WRK_DIR}/example-dnscrypt-proxy.toml" "${WRK_DIR}/dnscrypt-proxy.toml"
+
+  # Set the dnscrypt directory as part of env
+  cat >> /etc/profile.d/user_vars.sh << EOF
+  export DNSCRYPT_HOME=${WRK_DIR}
+EOF
+
   # It determines the symlink source directory to resolve config toml path
   ln -rs "${WRK_DIR}/dnscrypt-proxy" /usr/bin/
   popd
@@ -44,7 +50,7 @@ function download_and_setup_dnscrypt() {
 export DEFAULT_INTERFACE=$(ip route get 9.9.9.9 | awk '{print $5}')
 
 mkdir -p /etc/profile.d/
-cat > /etc/profile.d/user_vars.sh << EOF
+cat >> /etc/profile.d/user_vars.sh << EOF
 export DEFAULT_INTERFACE=${DEFAULT_INTERFACE}
 EOF
 
