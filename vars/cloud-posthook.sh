@@ -19,10 +19,10 @@ function modify_dnscrypt_config() {
   sed -i -E 's/^# (blocked_names_f.*)$/\1/' dnscrypt-proxy.toml
 
   # Block DoH queries specified by client, force client to use dnscrypt DNS.
-  curl -sSL https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/refs/heads/master/doh-domains.txt >> blocked-names.txt
+  curl -sSfL https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/refs/heads/master/doh-domains.txt >> blocked-names.txt
 
   # Block NSFW domains
-  # curl -sSL https://raw.githubusercontent.com/hagezi/dns-blocklists/refs/heads/main/wildcard/nsfw.txt >> blocked-names.txt
+  # curl -sSfL https://raw.githubusercontent.com/hagezi/dns-blocklists/refs/heads/main/wildcard/nsfw.txt >> blocked-names.txt
 
   cat >> blocked-names.txt << EOF
   ## Add whatever other blocked domains you require here

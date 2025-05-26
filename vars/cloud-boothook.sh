@@ -56,7 +56,7 @@ EOF
 
 # Setup firewall, toggle the nftables service later
 # This won't work for redhat variants. For redhat, place this in /etc/sysconfig/nftables.conf or /etc/nftables/main.nft
-curl -sSL https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/refs/heads/main/vars/nftables.conf | envsubst '$DEFAULT_INTERFACE' > /etc/nftables.conf
+curl -sSfL https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/refs/heads/main/vars/nftables.conf | envsubst '$DEFAULT_INTERFACE' > /etc/nftables.conf
 nft -f /etc/nftables.conf
 
 # Basic dnscrpt-proxy setup. Change the toml/service later
