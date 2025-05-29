@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# The main cloud-init process is using initial set of env variables and those are being passed to
+# this posthook child process. The env variables set in cloud-boothook.sh need to be manually sourced
+USER_VAR_FILE="./etc/profile.d/user_vars.sh"
+if [ -f "$USER_VAR_FILE" ]; then
+  . "$USER_VAR_FILE"
+fi
+
 function disable_systemd_resolved() {
   # TODO: Need to make this atomic using traps
   systemctl disable --now systemd-resolved.service
@@ -25,7 +32,7 @@ function modify_dnscrypt_config() {
   # curl -sSfL https://raw.githubusercontent.com/hagezi/dns-blocklists/refs/heads/main/wildcard/nsfw.txt >> blocked-names.txt
 
   cat >> blocked-names.txt << EOF
-  ## Add whatever other blocked domains you require here
+## Add whatever other blocked domains you require here
 EOF
   popd
 }
