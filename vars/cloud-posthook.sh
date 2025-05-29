@@ -39,8 +39,8 @@ EOF
 
 systemctl enable --now nftables.service
 
-disable_systemd_resolved
 modify_dnscrypt_config
+disable_systemd_resolved
 dnscrypt-proxy -service install
 dnscrypt-proxy -service start
 sleep 5s

@@ -38,7 +38,7 @@ function download_and_setup_dnscrypt() {
 
   # Set the dnscrypt directory as part of env
   cat >> /etc/profile.d/user_vars.sh << EOF
-  export DNSCRYPT_HOME=${WRK_DIR}
+  export DNSCRYPT_HOME="/opt/dnscrypt-proxy/${WRK_DIR}"
 EOF
 
   # It determines the symlink source directory to resolve config toml path
