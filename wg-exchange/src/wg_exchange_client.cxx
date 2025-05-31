@@ -1,22 +1,20 @@
-#include <absl/flags/flag.h>
-#include <absl/flags/parse.h>
-#include <absl/flags/usage.h>
+#include <boost/program_options.hpp>
 #include <generated/wg_exchange.grpc.pb.h>
 #include <grpcpp/create_channel.h>
 
 #include "wg_exchange.h"
 
+namespace po = boost::program_options;
+namespace ge = grpc::experimental;
+
 using grpc::Channel;
 using grpc::ChannelCredentials;
 using grpc::CreateChannel;
-using grpc::experimental::CertificateProviderInterface;
-using grpc::experimental::FileWatcherCertificateProvider;
-using grpc::experimental::TlsChannelCredentialsOptions;
-using grpc::experimental::TlsCredentials;
+using ge::CertificateProviderInterface;
+using ge::FileWatcherCertificateProvider;
+using ge::TlsChannelCredentialsOptions;
+using ge::TlsCredentials;
 
-ABSL_FLAG(std::string, target, "127.0.0.1:59910", "Server exchange endpoint");
-ABSL_FLAG(bool, tls, false, "Toggle tls on");
-ABSL_FLAG(std::string, tls_cert, "./tls/c_cert.pem", "Root Cert File Path");
 
 class ClientHandler {
  protected:
@@ -72,13 +70,22 @@ class TlsClientHandler : public ClientHandler {
 };
 
 int main(int argc, char** argv) {
-  absl::SetProgramUsageMessage("");
-  absl::ParseCommandLine(argc, argv);
-  std::string target = absl::GetFlag(FLAGS_target);
+  po::options_description desc("Allowed Options", DEFAULT_LINE_LENGTH, DEFAULT_DESCRIPTION_LENGTH);
+  desc.add_options()
+    ("help", "produce help message")
+    ("target", po::value<std::string>()->default_value("127.0.0.1:59910"), "server exchange endpoint")
+    ("tls","toggle TLS on")
+    ("tls-cert", po::value<std::string>()->default_value("./tls/c_cert.pem"), "root cert file path");
+  po::variables_map vm;
+  po::store(po::parse_command_line(argc,argv,desc), vm);
+  if(vm.count("help")) {
+    std::cout << desc << '\n';
+    return 1;
+  }
+  const std::string target = vm["target"].as<std::string>();
   std::unique_ptr<ClientHandler> handler = nullptr;
-  if (absl::GetFlag(FLAGS_tls)) {
-    handler = std::make_unique<TlsClientHandler>(target,
-                                                 absl::GetFlag(FLAGS_tls_cert));
+  if (vm.count("tls")) {
+    handler = std::make_unique<TlsClientHandler>(target, vm["tls-cert"].as<std::string>());
   } else {
     handler = std::make_unique<ClientHandler>(target);
   }

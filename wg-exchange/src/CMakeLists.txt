@@ -11,8 +11,7 @@ target_include_directories(wg-exchange-server PRIVATE ${CMAKE_CURRENT_BINARY_DIR
 target_link_libraries(wg-exchange-server
   hacl_curve25519
   wg_proto
-  absl::flags
-  absl::flags_parse
+  Boost::program_options
   ${_REFLECTION}
   ${_GRPC_GRPCPP}
   ${_PROTOBUF_LIBPROTOBUF}
@@ -22,8 +21,7 @@ add_executable(wg-exchange-client "wg_exchange_client.cxx")
 target_include_directories(wg-exchange-client PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(wg-exchange-client
   wg_proto
-  absl::flags
-  absl::flags_parse
+  Boost::program_options
   ${_REFLECTION}
   ${_GRPC_GRPCPP}
   ${_PROTOBUF_LIBPROTOBUF})

@@ -9,7 +9,9 @@
         "CMAKE_C_COMPILER": "/usr/bin/clang",
         "CMAKE_LINKER_TYPE": "LLD",
         "CMAKE_GENERATOR": "Ninja",
-        "BUILD_TESTING": "OFF"
+        "BUILD_TESTING": "OFF",
+        // For gRPC installation directory prefix
+        "CMAKE_PREFIX_PATH": "~/.local"
       }
     },
     {

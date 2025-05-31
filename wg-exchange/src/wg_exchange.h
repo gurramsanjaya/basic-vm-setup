@@ -9,6 +9,8 @@
 
 #define WG_KEY_LEN 32
 #define WG_KEY_LEN_BASE64 ((((WG_KEY_LEN) + 2) / 3) * 4 + 1)
+#define DEFAULT_LINE_LENGTH 120
+#define DEFAULT_DESCRIPTION_LENGTH 80
 
 // Using the same base64 encoding implementaion as in wireguard-tools
 inline void encode_base64(char dest[4], const uint8_t src[3]) {

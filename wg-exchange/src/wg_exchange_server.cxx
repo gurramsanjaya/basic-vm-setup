@@ -1,6 +1,4 @@
-#include <absl/flags/flag.h>
-#include <absl/flags/parse.h>
-#include <absl/flags/usage.h>
+#include <boost/program_options.hpp>
 #include <absl/random/random.h>
 #include <generated/wg_exchange.grpc.pb.h>
 #include <grpcpp/grpcpp.h>
@@ -9,23 +7,17 @@
 #include "service_dbus_handle.h"
 #include "wg_exchange.h"
 
+namespace po = boost::program_options;
+namespace ge = grpc::experimental;
+
 using grpc::CallbackServerContext;
 using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerCredentials;
 using grpc::ServerUnaryReactor;
-using grpc::experimental::FileWatcherCertificateProvider;
-using grpc::experimental::TlsServerCredentials;
-using grpc::experimental::TlsServerCredentialsOptions;
-
-ABSL_FLAG(std::string, uri, "127.0.0.1:59910", "Server Listening URI");
-ABSL_FLAG(std::string, sys_svc_nm, "wg-quick@wgs0.service",
-          "Wireguard device service");
-ABSL_FLAG(bool, tls, false, "Toggle tls on");
-ABSL_FLAG(std::string, tls_private_key, "./tls/s_private.pem",
-          "Private Key File Path");
-ABSL_FLAG(std::string, tls_cert, "./tls/s_cert.pem",
-          "Certificate Key File Path");
+using ge::FileWatcherCertificateProvider;
+using ge::TlsServerCredentials;
+using ge::TlsServerCredentialsOptions;
 
 class WGReactor : public grpc::ServerUnaryReactor {
  private:
@@ -84,13 +76,13 @@ class WGExchangeImpl final : public WGExchange::CallbackService {
 class IGrpcHandler {
  protected:
   ServerBuilder bldr_;
-  std::string uri_;
+  std::string url_;
   WGExchangeImpl svc_;
   std::unique_ptr<Server> srvr_ = nullptr;
   std::shared_ptr<ServerCredentials> creds_ = nullptr;
   IGrpcHandler() = delete;
-  IGrpcHandler(std::string uri, std::string sys_srvc_nm)
-      : uri_(std::move(uri)), svc_(ServiceDBusHandler::create(sys_srvc_nm)) {}
+  IGrpcHandler(std::string url, std::string sys_srvc_nm)
+      : url_(std::move(url)), svc_(ServiceDBusHandler::create(sys_srvc_nm)) {}
 
  public:
   void init() {
@@ -107,10 +99,10 @@ class IGrpcHandler {
 
 class GrpcHandler : public IGrpcHandler {
  public:
-  GrpcHandler(std::string uri, std::string sys_svc_nm)
-      : IGrpcHandler(std::move(uri), std::move(sys_svc_nm)) {
+  GrpcHandler(std::string url, std::string sys_svc_nm)
+      : IGrpcHandler(std::move(url), std::move(sys_svc_nm)) {
     creds_ = grpc::InsecureServerCredentials();
-    bldr_.AddListeningPort(uri_, creds_);
+    bldr_.AddListeningPort(url_, creds_);
     bldr_.RegisterService(&svc_);
   }
 };
@@ -121,15 +113,15 @@ class TlsGrpcHandler : public IGrpcHandler {
   TlsServerCredentialsOptions opt_;
 
  public:
-  TlsGrpcHandler(std::string uri, std::string sys_svc_nm,
+  TlsGrpcHandler(std::string url, std::string sys_svc_nm,
                  std::string tls_priv_path, std::string tls_cert_path)
-      : IGrpcHandler(std::move(uri), std::move(sys_svc_nm)),
+      : IGrpcHandler(std::move(url), std::move(sys_svc_nm)),
         tls_priv_path_(std::move(tls_priv_path)),
         tls_cert_path_(std::move(tls_cert_path)),
         opt_(std::make_shared<FileWatcherCertificateProvider>(
             tls_priv_path_, tls_cert_path_, 60)) {
     creds_ = TlsServerCredentials(opt_);
-    bldr_.AddListeningPort(uri_, creds_);
+    bldr_.AddListeningPort(url_, creds_);
     bldr_.RegisterService(&svc_);
   }
 };
@@ -137,16 +129,31 @@ class TlsGrpcHandler : public IGrpcHandler {
 int main(int argc, char** argv) {
   // DBus::set_logging_function(DBus::log_std_err);
   // DBus::set_log_level(SL_LogLevel::SL_DEBUG);
-  absl::SetProgramUsageMessage("");
-  absl::ParseCommandLine(argc, argv);
+
+  po::options_description desc("Allowed Options", DEFAULT_LINE_LENGTH, DEFAULT_DESCRIPTION_LENGTH);
+  desc.add_options()
+    ("help", "produce help message")
+    ("url", po::value<std::string>()->default_value("127.0.0.1:59910"), "server listening endpoint")
+    ("system-service-name", po::value<std::string>()->default_value("wg-quick@wgs0.service"), "wireguard device service")
+    ("tls","toggle TLS on")
+    ("tls-private-key", po::value<std::string>()->default_value("./tls/s_private.pem"),"private Key File Path")
+    ("tls-cert", po::value<std::string>()->default_value("./tls/s_cert.pem"), "certificate file path");
+  po::variables_map vm;
+  po::store(po::parse_command_line(argc,argv,desc), vm);
+  if(vm.count("help")) {
+    std::cout << desc << '\n';
+    return 1;
+  }
   std::unique_ptr<IGrpcHandler> handler = nullptr;
-  if (absl::GetFlag(FLAGS_tls)) {
+  const std::string url = vm["url"].as<std::string>();
+  const std::string sys_svc_nm = vm["system-service-name"].as<std::string>();
+  if (vm.count("tls")) {
     handler = std::make_unique<TlsGrpcHandler>(
-        absl::GetFlag(FLAGS_uri), absl::GetFlag(FLAGS_sys_svc_nm),
-        absl::GetFlag(FLAGS_tls_private_key), absl::GetFlag(FLAGS_tls_cert));
+        url, sys_svc_nm,
+        vm["tls-private-key"].as<std::string>(), vm["tls-cert"].as<std::string>());
   } else {
-    handler = std::make_unique<GrpcHandler>(absl::GetFlag(FLAGS_uri),
-                                            absl::GetFlag(FLAGS_sys_svc_nm));
+    handler = std::make_unique<GrpcHandler>(url,
+                                            sys_svc_nm);
   }
   handler->init();
   handler->wait();
