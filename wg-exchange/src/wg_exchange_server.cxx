@@ -1,4 +1,5 @@
 #include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
 #include <absl/random/random.h>
 #include <generated/wg_exchange.grpc.pb.h>
 #include <grpcpp/grpcpp.h>
@@ -82,7 +83,7 @@ class IGrpcHandler {
   std::shared_ptr<ServerCredentials> creds_ = nullptr;
   IGrpcHandler() = delete;
   IGrpcHandler(std::string url, std::string sys_srvc_nm)
-      : url_(std::move(url)), svc_(ServiceDBusHandler::create(sys_srvc_nm)) {}
+      : url_(std::move(url)), svc_(ServiceDBusHandler::get_instance(sys_srvc_nm)) {}
 
  public:
   void init() {
@@ -97,6 +98,7 @@ class IGrpcHandler {
   }
 };
 
+// TODO: Refactor the badly written inheritence into composition
 class GrpcHandler : public IGrpcHandler {
  public:
   GrpcHandler(std::string url, std::string sys_svc_nm)
@@ -128,25 +130,30 @@ class TlsGrpcHandler : public IGrpcHandler {
 
 int main(int argc, char** argv) {
   // DBus::set_logging_function(DBus::log_std_err);
-  // DBus::set_log_level(SL_LogLevel::SL_DEBUG);
+  // DBus::set_log_level(SL_LogLevel::SL_TRACE);
 
   po::options_description desc("Allowed Options", DEFAULT_LINE_LENGTH, DEFAULT_DESCRIPTION_LENGTH);
   desc.add_options()
     ("help", "produce help message")
     ("url", po::value<std::string>()->default_value("127.0.0.1:59910"), "server listening endpoint")
-    ("system-service-name", po::value<std::string>()->default_value("wg-quick@wgs0.service"), "wireguard device service")
+    ("wg-conf-file", po::value<std::string>()->default_value("wgs0.conf"), "wireguard device conf file in /etc/wireguard/.")
     ("tls","toggle TLS on")
     ("tls-private-key", po::value<std::string>()->default_value("./tls/s_private.pem"),"private Key File Path")
     ("tls-cert", po::value<std::string>()->default_value("./tls/s_cert.pem"), "certificate file path");
   po::variables_map vm;
   po::store(po::parse_command_line(argc,argv,desc), vm);
-  if(vm.count("help")) {
-    std::cout << desc << '\n';
-    return 1;
-  }
-  std::unique_ptr<IGrpcHandler> handler = nullptr;
+
   const std::string url = vm["url"].as<std::string>();
-  const std::string sys_svc_nm = vm["system-service-name"].as<std::string>();
+  const std::string wg_conf_file = vm["wg-conf-file"].as<std::string>();
+  std::size_t pos = wg_conf_file.rfind(".conf");
+
+  if(vm.count("help") || pos == wg_conf_file.npos || !boost::filesystem::is_regular_file("/etc/wireguard/" + wg_conf_file)) {
+    std::cout << desc << '/n';
+    return 1;
+  };
+
+  const std::string sys_svc_nm{"wg-quick@" + wg_conf_file.substr(0, pos) + ".service"};
+  std::unique_ptr<IGrpcHandler> handler = nullptr;
   if (vm.count("tls")) {
     handler = std::make_unique<TlsGrpcHandler>(
         url, sys_svc_nm,

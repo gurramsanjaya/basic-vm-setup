@@ -1,15 +1,65 @@
+#include <iostream>
+#include <vector>
+
+#define VAL_MSG_ITR_GET(val, itr, get_func, ...) \
+  do {                                           \
+    val = itr.get_func(__VA_ARGS__);             \
+    itr.next();                                  \
+  } while (0)
+
+#define MSG_ITR_GET(itr, get_func, ...) \
+  do {                                  \
+    itr.get_func(__VA_ARGS__);          \
+    itr.next();                         \
+  } while (0)
+
+typedef struct Changes {
+  std::string type;
+  std::string file_nm;
+  std::string dest;
+} Changes;
+
+typedef struct Enabled {
+  bool carries_install_info;
+  std::vector<Changes> changes;
+} Enabled;
+
+// Needs to be placed before the dbus-cxx.h include
+namespace Dbus {
+inline std::string signature(Enabled) { return "ba(sss)"; }
+}  // namespace Dbus
+
+#include <boost/thread.hpp>
+
 #include "service_dbus_handle.h"
 
 using DBus::Connection;
+using DBus::MessageIterator;
 using DBus::MethodProxy;
+using DBus::MultipleReturn;
 using DBus::ObjectProxy;
 using DBus::Path;
 using DBus::StandaloneDispatcher;
 
+// (sss) is STRUCT type, so needs to recurse
+MessageIterator& operator>>(MessageIterator& itr, Changes& val) {
+  MessageIterator sub_itr = itr.recurse();
+  VAL_MSG_ITR_GET(val.type, sub_itr, get_string);
+  VAL_MSG_ITR_GET(val.file_nm, sub_itr, get_string);
+  VAL_MSG_ITR_GET(val.dest, sub_itr, get_string, );
+  return itr;
+}
+
+MessageIterator& operator>>(MessageIterator& itr, Enabled& val) {
+  VAL_MSG_ITR_GET(val.carries_install_info, itr, get_bool);
+  MSG_ITR_GET(itr, get_array, val.changes);
+  return itr;
+}
+
 /**
  * TODO:
  * Find a way to make this happen with DBus Session instead of System i.e. by
- * not using systemd1.Manager.
+ * not using org.freedesktop.systemd1.Manager.
  */
 class ServiceDBusHandler::SystemdManager : public ObjectProxy {
  protected:
@@ -20,6 +70,9 @@ class ServiceDBusHandler::SystemdManager : public ObjectProxy {
       nullptr;
   std::shared_ptr<MethodProxy<Path(std::string, std::string)>> restart_unit_ =
       nullptr;
+  std::shared_ptr<MethodProxy<Enabled(std::vector<std::string>, bool, bool)>>
+      enable_units_ = nullptr;
+  std::shared_ptr<MethodProxy<void(void)>> reload_ = nullptr;
 
   SystemdManager(std::shared_ptr<Connection> conn)
       : ObjectProxy(conn, "org.freedesktop.systemd1",
@@ -32,6 +85,11 @@ class ServiceDBusHandler::SystemdManager : public ObjectProxy {
         "org.freedesktop.systemd1.Manager", "StopUnit");
     restart_unit_ = this->create_method<Path(std::string, std::string)>(
         "org.freedesktop.systemd1.Manager", "RestartUnit");
+    enable_units_ =
+        this->create_method<Enabled(std::vector<std::string>, bool, bool)>(
+            "org.freedesktop.systemd1.Manager", "EnableUnitFiles");
+    reload_ = this->create_method<void(void)>(
+        "org.freedesktop.systemd1.Manager", "Reload");
   }
 
  public:
@@ -52,6 +110,13 @@ class ServiceDBusHandler::SystemdManager : public ObjectProxy {
   Path restart_unit(std::string& name, std::string& mode) {
     return (*restart_unit_)(name, mode);
   }
+
+  Enabled enable_units(std::vector<std::string> units, bool runtime,
+                       bool force) {
+    return (*enable_units_)(units, runtime, force);
+  }
+
+  void daemon_reload() { (*reload_)(); }
 };
 
 // class ServiceHandler::ServiceUnit : public ObjectProxy {
@@ -68,7 +133,7 @@ class ServiceDBusHandler::SystemdManager : public ObjectProxy {
 // };
 
 ServiceDBusHandler::ServiceDBusHandler(std::string svc_nm)
-    : svc_nm_(std::move(svc_nm)) {
+    : service_nm_(std::move(svc_nm)) {
   dispatch_ = DBus::StandaloneDispatcher::create();
   conn_ = dispatch_->create_connection(DBus::BusType::SYSTEM);
   obj_ = SystemdManager::create(conn_);
@@ -77,10 +142,27 @@ ServiceDBusHandler::ServiceDBusHandler(std::string svc_nm)
 bool ServiceDBusHandler::is_service() {
   bool ret = false;
   try {
-    obj_->get_unit(svc_nm_);
+    obj_->get_unit(service_nm_);
     ret = true;
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
+
+    // If it throws an exception here, let it go unhandled.
+    std::cerr << "trying to enable the service " << service_nm_
+              << " permanently" << '\n';
+    std::vector<std::string> units(1, service_nm_);
+    Enabled enabled = obj_->enable_units(units, false, false);
+
+    std::cerr << enabled.changes[0].type
+              << ", name: " << enabled.changes[0].file_nm
+              << ", destination: " << enabled.changes[0].dest << '\n';
+    boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+
+    obj_->daemon_reload();
+    boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+
+    obj_->get_unit(service_nm_);
+    ret = true;
   }
   return ret;
 }
@@ -89,7 +171,7 @@ bool ServiceDBusHandler::restart_service() {
   bool ret = false;
   try {
     std::string mode = SystemdManager::MODE_REPLACE;
-    obj_->restart_unit(svc_nm_, mode);
+    obj_->restart_unit(service_nm_, mode);
     ret = true;
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
@@ -97,7 +179,11 @@ bool ServiceDBusHandler::restart_service() {
   return ret;
 }
 
-std::shared_ptr<ServiceDBusHandler> ServiceDBusHandler::create(
-    std::string svc_nm) {
-  return std::make_shared<ServiceDBusHandler>(svc_nm);
+std::shared_ptr<ServiceDBusHandler> ServiceDBusHandler::get_instance(
+    std::string service_nm) {
+  boost::lock_guard<boost::mutex> lock(mutex_);
+  if (!instance_) {
+    instance_ = std::make_shared<ServiceDBusHandler>(service_nm);
+  }
+  return instance_;
 }

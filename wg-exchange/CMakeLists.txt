@@ -11,7 +11,7 @@ message(STATUS "${CMAKE_INSTALL_PREFIX}")
 find_package(Threads REQUIRED)
 find_package(gRPC REQUIRED)
 find_package(dbus-cxx REQUIRED)
-find_package(Boost REQUIRED COMPONENTS program_options)
+find_package(Boost REQUIRED COMPONENTS program_options thread chrono filesystem)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 add_subdirectory("src")

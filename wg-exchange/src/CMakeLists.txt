@@ -12,6 +12,9 @@ target_link_libraries(wg-exchange-server
   hacl_curve25519
   wg_proto
   Boost::program_options
+  Boost::thread
+  Boost::filesystem
+  Boost::chrono
   ${_REFLECTION}
   ${_GRPC_GRPCPP}
   ${_PROTOBUF_LIBPROTOBUF}
