@@ -137,53 +137,105 @@ ServiceDBusHandler::ServiceDBusHandler(std::string svc_nm)
   dispatch_ = DBus::StandaloneDispatcher::create();
   conn_ = dispatch_->create_connection(DBus::BusType::SYSTEM);
   obj_ = SystemdManager::create(conn_);
+  running_ = true;
 }
 
-bool ServiceDBusHandler::is_service() {
-  bool ret = false;
-  try {
-    obj_->get_unit(service_nm_);
-    ret = true;
-  } catch (const std::exception& e) {
-    std::cerr << e.what() << '\n';
-
-    // If it throws an exception here, let it go unhandled.
-    std::cerr << "trying to enable the service " << service_nm_
-              << " permanently" << '\n';
-    std::vector<std::string> units(1, service_nm_);
-    Enabled enabled = obj_->enable_units(units, false, false);
-
-    std::cerr << enabled.changes[0].type
-              << ", name: " << enabled.changes[0].file_nm
-              << ", destination: " << enabled.changes[0].dest << '\n';
-    boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
-
-    obj_->daemon_reload();
-    boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
-
-    obj_->get_unit(service_nm_);
-    ret = true;
+void ServiceDBusHandler::run_worker() {
+  boost::chrono::seconds sleep_time(5);
+  bool nr = false;
+  while (running_) {
+    {
+      boost::unique_lock lock(restart_mutex_);
+      restart_cv_.wait_for(lock, sleep_time,
+                           [this] { return this->needs_restart_; });
+      nr = needs_restart_;
+      needs_restart_ = false;
+    }
+    if (nr) {
+      restart_service();
+    }
   }
-  return ret;
+  {
+    boost::lock_guard lock(restart_mutex_);
+    nr = needs_restart_;
+    needs_restart_ = false;  // Not really required
+  }
+  if (nr) {
+    // Are we sure it will even come here? Because running_ = false is only set
+    // in the destructor. And 'usually' methods shouldn't be accessed after
+    // desctructor is called. I'm a little worried about making the desctructor
+    // wait for even a bit.
+    boost::this_thread::sleep_for(boost::chrono::seconds(1));
+    restart_service();
+  }
 }
 
-bool ServiceDBusHandler::restart_service() {
-  bool ret = false;
+void ServiceDBusHandler::stop_worker() {
+  running_ = false;
+  if (t_.joinable()) {
+    std::cerr << "shutting down the ServiceDBusHandler" << '\n';
+    t_.join();
+  }
+}
+
+void ServiceDBusHandler::restart_service() {
   try {
     std::string mode = SystemdManager::MODE_REPLACE;
     obj_->restart_unit(service_nm_, mode);
-    ret = true;
   } catch (const std::exception& e) {
-    std::cerr << e.what() << '\n';
+    worker_exp_ = std::current_exception();
   }
-  return ret;
+}
+
+bool ServiceDBusHandler::is_service() {
+  if (!is_service_) {
+    try {
+      obj_->get_unit(service_nm_);
+      is_service_ = true;
+    } catch (const std::exception& e) {
+      std::cerr << e.what() << '\n';
+
+      // If it throws an exception here, let it go unhandled.
+      std::cerr << "trying to enable the service " << service_nm_
+                << " permanently" << '\n';
+      std::vector<std::string> units(1, service_nm_);
+      Enabled enabled = obj_->enable_units(units, false, false);
+
+      std::cerr << enabled.changes[0].type
+                << ", name: " << enabled.changes[0].file_nm
+                << ", destination: " << enabled.changes[0].dest << '\n';
+      boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+
+      obj_->daemon_reload();
+      boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+
+      obj_->get_unit(service_nm_);
+      is_service_ = true;
+    }
+
+    // Starting the separate thread here instead of the constructor
+    t_ = boost::thread(&ServiceDBusHandler::run_worker, this);
+  }
+  return is_service_;
+}
+
+bool ServiceDBusHandler::trigger_restart_service() {
+  // Transporting worker exception to main/gRPC thread
+  if (worker_exp_) {
+    std::rethrow_exception(worker_exp_);
+  }
+  std::lock_guard lock(restart_mutex_);
+  needs_restart_ = true;
+  restart_cv_.notify_one();
 }
 
 std::shared_ptr<ServiceDBusHandler> ServiceDBusHandler::get_instance(
     std::string service_nm) {
-  boost::lock_guard<boost::mutex> lock(mutex_);
+  boost::lock_guard<boost::mutex> lock(inst_mutex_);
   if (!instance_) {
     instance_ = std::make_shared<ServiceDBusHandler>(service_nm);
   }
   return instance_;
 }
+
+ServiceDBusHandler::~ServiceDBusHandler() { stop_worker(); }

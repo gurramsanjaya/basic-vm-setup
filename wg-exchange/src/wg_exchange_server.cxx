@@ -29,7 +29,7 @@ class WGReactor : public grpc::ServerUnaryReactor {
       : sys_svc_hdl_(sys_svc_hdl) {}
   void OnDone() {
     if (auto p = sys_svc_hdl_.lock()) {
-      p->restart_service();
+      p->trigger_restart_service();
     }
   }
 };
