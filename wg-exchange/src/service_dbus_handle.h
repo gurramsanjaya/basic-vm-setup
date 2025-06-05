@@ -23,6 +23,7 @@ class ServiceDBusHandler {
   inline static boost::mutex inst_mutex_;
   inline static std::shared_ptr<ServiceDBusHandler> instance_ = nullptr;
 
+  void start_worker();
   void run_worker();
   void stop_worker();
   void restart_service();
@@ -36,7 +37,7 @@ class ServiceDBusHandler {
   // restarted? Mainly as a check to see if external forces have
   // modified/deleted the service.
   bool is_service();
-  bool trigger_restart_service();
+  void trigger_restart_service();
   static std::shared_ptr<ServiceDBusHandler> get_instance(
       std::string service_nm = "");
   ~ServiceDBusHandler();

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
-message(STATUS "${CMAKE_INSTALL_PREFIX}")
+message(STATUS "using cmake install prefix: ${CMAKE_INSTALL_PREFIX}")
 
 find_package(Threads REQUIRED)
 find_package(gRPC REQUIRED)

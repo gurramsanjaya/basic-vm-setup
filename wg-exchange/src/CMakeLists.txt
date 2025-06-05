@@ -6,7 +6,10 @@ set(PROTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/protos")
 add_subdirectory("ext_hacl_star")
 add_subdirectory("generated")
 
-add_executable(wg-exchange-server "wg_exchange_server.cxx" "service_dbus_handle.cxx")
+add_executable(wg-exchange-server
+  "${CMAKE_CURRENT_SOURCE_DIR}/wg_exchange_server.cxx"
+  "${CMAKE_CURRENT_SOURCE_DIR}/service_dbus_handle.cxx"
+)
 target_include_directories(wg-exchange-server PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(wg-exchange-server
   hacl_curve25519
@@ -20,7 +23,7 @@ target_link_libraries(wg-exchange-server
   ${_PROTOBUF_LIBPROTOBUF}
   ${_DBUS_CXX})
 
-add_executable(wg-exchange-client "wg_exchange_client.cxx")
+add_executable(wg-exchange-client "${CMAKE_CURRENT_SOURCE_DIR}/wg_exchange_client.cxx")
 target_include_directories(wg-exchange-client PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(wg-exchange-client
   wg_proto

@@ -145,29 +145,36 @@ void ServiceDBusHandler::run_worker() {
   bool nr = false;
   while (running_) {
     {
-      boost::unique_lock lock(restart_mutex_);
+      boost::unique_lock<boost::mutex> lock(restart_mutex_);
+      std::cerr << "worker ServiceDBusHandler going to sleep..." << '\n';
       restart_cv_.wait_for(lock, sleep_time,
                            [this] { return this->needs_restart_; });
+      std::cerr << "worker ServiceDBusHandler awake..." << '\n';
       nr = needs_restart_;
       needs_restart_ = false;
     }
+    // Here needs_restart_ can become true and then just after destructor can
+    // be called making running_ false.
     if (nr) {
       restart_service();
     }
   }
   {
-    boost::lock_guard lock(restart_mutex_);
+    boost::lock_guard<boost::mutex> lock(restart_mutex_);
     nr = needs_restart_;
     needs_restart_ = false;  // Not really required
   }
   if (nr) {
-    // Are we sure it will even come here? Because running_ = false is only set
-    // in the destructor. And 'usually' methods shouldn't be accessed after
-    // destructor is called. I don't know what might happen by making the desctructor
-    // wait for even a bit.
+    // It might come here, see above. Sleeping only for 1 sec to avoid longer
+    // wait times in destructor.
     boost::this_thread::sleep_for(boost::chrono::seconds(1));
     restart_service();
   }
+}
+
+void ServiceDBusHandler::start_worker() {
+  std::cerr << "starting ServiceDbusHandler" << '\n';
+  t_ = boost::thread(&ServiceDBusHandler::run_worker, this);
 }
 
 void ServiceDBusHandler::stop_worker() {
@@ -180,8 +187,10 @@ void ServiceDBusHandler::stop_worker() {
 
 void ServiceDBusHandler::restart_service() {
   try {
+    std::cerr << "restarting service..." << '\n';
     std::string mode = SystemdManager::MODE_REPLACE;
     obj_->restart_unit(service_nm_, mode);
+    std::cerr << "restarted service..." << '\n';
   } catch (const std::exception& e) {
     worker_exp_ = std::current_exception();
   }
@@ -214,19 +223,22 @@ bool ServiceDBusHandler::is_service() {
     }
 
     // Starting the separate thread here instead of the constructor
-    t_ = boost::thread(&ServiceDBusHandler::run_worker, this);
+    start_worker();
   }
   return is_service_;
 }
 
-bool ServiceDBusHandler::trigger_restart_service() {
+void ServiceDBusHandler::trigger_restart_service() {
   // Transporting worker exception to main/gRPC thread
   if (worker_exp_) {
     std::rethrow_exception(worker_exp_);
   }
-  std::lock_guard lock(restart_mutex_);
-  needs_restart_ = true;
+  {
+    boost::lock_guard<boost::mutex> lock(restart_mutex_);
+    needs_restart_ = true;
+  }
   restart_cv_.notify_one();
+  std::cerr << "notified worker thread..." << '\n';
 }
 
 std::shared_ptr<ServiceDBusHandler> ServiceDBusHandler::get_instance(
