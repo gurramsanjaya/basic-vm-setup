@@ -141,48 +141,52 @@ ServiceDBusHandler::ServiceDBusHandler(std::string svc_nm)
 }
 
 void ServiceDBusHandler::run_worker() {
-  boost::chrono::seconds sleep_time(5);
-  bool nr = false;
+  boost::chrono::seconds sleep_time(30);  // To sleep after performing a restart
+  bool has_restarted = false;
   while (running_) {
     {
       boost::unique_lock<boost::mutex> lock(restart_mutex_);
-      std::cerr << "worker ServiceDBusHandler going to sleep..." << '\n';
-      restart_cv_.wait_for(lock, sleep_time,
-                           [this] { return this->needs_restart_; });
+      std::cerr << "worker ServiceDBusHandler waiting..." << '\n';
+      restart_cv_.wait(
+          lock, [this] { return this->needs_restart_ || !this->running_; });
+      std::cerr << "worker ServiceDBusHandler performing restart check..."
+                << '\n';
+      if (needs_restart_) {
+        restart_service();
+        has_restarted = !(needs_restart_ = false);
+      }
+    }
+    if (has_restarted) {
+      boost::unique_lock<boost::mutex> lock(inst_mutex_);
+      std::cerr << "worker ServiceDBusHandler sleeping after restart..."
+                << '\n';
+      inst_cv_.wait_for(lock, sleep_time, [this] { return !this->running_; });
       std::cerr << "worker ServiceDBusHandler awake..." << '\n';
-      nr = needs_restart_;
-      needs_restart_ = false;
-    }
-    // Here needs_restart_ can become true and then just after destructor can
-    // be called making running_ false.
-    if (nr) {
-      restart_service();
+      has_restarted = !has_restarted;
     }
   }
-  {
-    boost::lock_guard<boost::mutex> lock(restart_mutex_);
-    nr = needs_restart_;
-    needs_restart_ = false;  // Not really required
-  }
-  if (nr) {
-    // It might come here, see above. Sleeping only for 1 sec to avoid longer
-    // wait times in destructor.
-    boost::this_thread::sleep_for(boost::chrono::seconds(1));
+  // Restart one last time if needs_restart_ = true
+  boost::lock_guard<boost::mutex> lock(restart_mutex_);
+  if (needs_restart_) {
     restart_service();
+    needs_restart_ = false;  // Not really required
   }
 }
 
 void ServiceDBusHandler::start_worker() {
-  std::cerr << "starting ServiceDbusHandler" << '\n';
+  std::cerr << "starting ServiceDbusHandler..." << '\n';
   t_ = boost::thread(&ServiceDBusHandler::run_worker, this);
 }
 
 void ServiceDBusHandler::stop_worker() {
   running_ = false;
+  restart_cv_.notify_one();
+  inst_cv_.notify_one();
   if (t_.joinable()) {
-    std::cerr << "shutting down the ServiceDBusHandler" << '\n';
+    std::cerr << "shutting down the ServiceDBusHandler..." << '\n';
     t_.join();
   }
+  std::cerr << "shutdown of ServiceDBusHandler complete..." << '\n';
 }
 
 void ServiceDBusHandler::restart_service() {
@@ -241,13 +245,23 @@ void ServiceDBusHandler::trigger_restart_service() {
   std::cerr << "notified worker thread..." << '\n';
 }
 
-std::shared_ptr<ServiceDBusHandler> ServiceDBusHandler::get_instance(
+std::weak_ptr<ServiceDBusHandler> ServiceDBusHandler::get_instance(
     std::string service_nm) {
   boost::lock_guard<boost::mutex> lock(inst_mutex_);
   if (!instance_) {
     instance_ = std::make_shared<ServiceDBusHandler>(service_nm);
   }
   return instance_;
+}
+
+void ServiceDBusHandler::forget_instance() {
+  boost::lock_guard<boost::mutex> lock(inst_mutex_);
+  if (instance_) {
+    // Might not be deleted here, some other weak_ptr holder might have upgraded
+    // to shared_ptr.
+    // TODO: Fix this somehow, or change from Singleton pattern
+    instance_ = nullptr;
+  }
 }
 
 ServiceDBusHandler::~ServiceDBusHandler() { stop_worker(); }
