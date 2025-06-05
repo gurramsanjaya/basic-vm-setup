@@ -163,7 +163,7 @@ void ServiceDBusHandler::run_worker() {
   if (nr) {
     // Are we sure it will even come here? Because running_ = false is only set
     // in the destructor. And 'usually' methods shouldn't be accessed after
-    // desctructor is called. I'm a little worried about making the desctructor
+    // destructor is called. I don't know what might happen by making the desctructor
     // wait for even a bit.
     boost::this_thread::sleep_for(boost::chrono::seconds(1));
     restart_service();
