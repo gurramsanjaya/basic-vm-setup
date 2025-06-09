@@ -255,13 +255,18 @@ std::weak_ptr<ServiceDBusHandler> ServiceDBusHandler::get_instance(
 }
 
 void ServiceDBusHandler::forget_instance() {
-  boost::lock_guard<boost::mutex> lock(inst_mutex_);
-  if (instance_) {
-    // Might not be deleted here, some other weak_ptr holder might have upgraded
-    // to shared_ptr.
-    // TODO: Fix this somehow, or change from Singleton pattern
-    instance_ = nullptr;
+  std::shared_ptr<ServiceDBusHandler> temp = nullptr;
+  temp.reset();
+  {
+    boost::lock_guard<boost::mutex> lock(inst_mutex_);
+    if (instance_) {
+      instance_.swap(temp);
+    }
   }
+  // Might not be deleted here, some other weak_ptr
+  // holder might have upgraded to shared_ptr.
+  // TODO: Fix this somehow, or change from Singleton pattern
+  temp = nullptr;
 }
 
 ServiceDBusHandler::~ServiceDBusHandler() { stop_worker(); }
