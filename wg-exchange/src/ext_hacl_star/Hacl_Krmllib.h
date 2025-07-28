@@ -22,35 +22,32 @@
  * SOFTWARE.
  */
 
-
 #ifndef __Hacl_Krmllib_H
 #define __Hacl_Krmllib_H
 
 #if defined(__cplusplus)
-extern "C" {
+extern "C"
+{
 #endif
 
-#include <string.h>
+#include "krml/internal/target.h"
 #include "krml/internal/types.h"
 #include "krml/lowstar_endianness.h"
-#include "krml/internal/target.h"
+#include <string.h>
 
-static KRML_NOINLINE uint64_t FStar_UInt64_eq_mask(uint64_t a, uint64_t b);
+    static KRML_NOINLINE uint64_t FStar_UInt64_eq_mask(uint64_t a, uint64_t b);
 
-static KRML_NOINLINE uint64_t FStar_UInt64_gte_mask(uint64_t a, uint64_t b);
+    static KRML_NOINLINE uint64_t FStar_UInt64_gte_mask(uint64_t a, uint64_t b);
 
-static inline FStar_UInt128_uint128
-FStar_UInt128_add_mod(FStar_UInt128_uint128 a, FStar_UInt128_uint128 b);
+    static inline FStar_UInt128_uint128 FStar_UInt128_add_mod(FStar_UInt128_uint128 a, FStar_UInt128_uint128 b);
 
-static inline FStar_UInt128_uint128
-FStar_UInt128_sub_mod(FStar_UInt128_uint128 a, FStar_UInt128_uint128 b);
+    static inline FStar_UInt128_uint128 FStar_UInt128_sub_mod(FStar_UInt128_uint128 a, FStar_UInt128_uint128 b);
 
-static inline FStar_UInt128_uint128
-FStar_UInt128_shift_right(FStar_UInt128_uint128 a, uint32_t s);
+    static inline FStar_UInt128_uint128 FStar_UInt128_shift_right(FStar_UInt128_uint128 a, uint32_t s);
 
-static inline FStar_UInt128_uint128 FStar_UInt128_uint64_to_uint128(uint64_t a);
+    static inline FStar_UInt128_uint128 FStar_UInt128_uint64_to_uint128(uint64_t a);
 
-static inline uint64_t FStar_UInt128_uint128_to_uint64(FStar_UInt128_uint128 a);
+    static inline uint64_t FStar_UInt128_uint128_to_uint64(FStar_UInt128_uint128 a);
 
 #if defined(__cplusplus)
 }

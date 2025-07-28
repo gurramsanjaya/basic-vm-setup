@@ -37,9 +37,12 @@ inline std::string signature(Enabled)
 }
 } // namespace Dbus
 
+#include <boost/chrono/time_point.hpp>
+#include <boost/filesystem/fstream.hpp>
+#include <boost/filesystem/operations.hpp>
 #include <boost/thread.hpp>
 
-#include "service_dbus_handle.h"
+#include "device_handle.h"
 
 using DBus::Connection;
 using DBus::MessageIterator;
@@ -67,11 +70,12 @@ MessageIterator &operator>>(MessageIterator &itr, Enabled &val)
 }
 
 /**
+ * Class DeviceHadnler::SystemdManager
  * TODO:
  * Find a way to make this happen with DBus Session instead of System i.e. by
  * not using org.freedesktop.systemd1.Manager.
  */
-class ServiceDBusHandler::SystemdManager : public ObjectProxy
+class DeviceHandler::SystemdManager : public ObjectProxy
 {
   protected:
     std::shared_ptr<MethodProxy<Path(std::string)>> get_unit_ = nullptr;
@@ -132,82 +136,109 @@ class ServiceDBusHandler::SystemdManager : public ObjectProxy
     }
 };
 
-// class ServiceHandler::ServiceUnit : public ObjectProxy {
-//  protected:
-//   ServiceUnit(std::shared_ptr<Connection> conn, Path& svc_path)
-//       : ObjectProxy(conn, "org.freedesktop.systemd1", svc_path) {}
-
-//  public:
-//   static std::shared_ptr<ServiceUnit> create(std::shared_ptr<Connection>
-//   conn,
-//                                              Path& svc_path) {
-//     return std::shared_ptr<ServiceUnit>(new ServiceUnit(conn, svc_path));
-//   }
-// };
-
-ServiceDBusHandler::ServiceDBusHandler(std::string svc_nm) : service_nm_(std::move(svc_nm))
+/**
+ * Class DeviceHandler
+ */
+DeviceHandler::DeviceHandler(std::string device_nm)
+    : device_nm_(std::move(device_nm)), device_fnm_("/etc/wireguard/" + device_nm + ".conf"),
+      service_nm_("wg-quick@" + device_nm_ + ".service")
 {
+    if (!boost::filesystem::is_regular_file(device_fnm_))
+    {
+        throw std::runtime_error("not a regular file: " + device_fnm_);
+    }
     dispatch_ = DBus::StandaloneDispatcher::create();
     conn_ = dispatch_->create_connection(DBus::BusType::SYSTEM);
     obj_ = SystemdManager::create(conn_);
-    running_ = true;
 }
 
-void ServiceDBusHandler::run_worker()
+// I'll rework this soon, such that the restart_service is run only once maybe
+void DeviceHandler::run_worker()
 {
-    boost::chrono::seconds sleep_time(30); // To sleep after performing a restart
-    bool has_restarted = false;
-    while (running_)
+    boost::chrono::seconds process_time(30);
+    boost::chrono::steady_clock::time_point start{boost::chrono::steady_clock::now()};
+    int counter = 0;
+    while (running_.load(std::memory_order_relaxed))
     {
+        if (start + process_time < boost::chrono::steady_clock::now() && counter > 0)
         {
-            boost::unique_lock<boost::mutex> lock(restart_mutex_);
-            std::cerr << "worker ServiceDBusHandler waiting..." << '\n';
-            restart_cv_.wait(lock, [this] { return this->needs_restart_ || !this->running_; });
-            std::cerr << "worker ServiceDBusHandler performing restart check..." << '\n';
-            if (needs_restart_)
-            {
-                restart_service();
-                has_restarted = !(needs_restart_ = false);
-            }
+            restart_service();
+            counter = 0;
         }
-        if (has_restarted)
+        else if (process_request())
         {
-            boost::unique_lock<boost::mutex> lock(inst_mutex_);
-            std::cerr << "worker ServiceDBusHandler sleeping after restart..." << '\n';
-            inst_cv_.wait_for(lock, sleep_time, [this] { return !this->running_; });
-            std::cerr << "worker ServiceDBusHandler awake..." << '\n';
-            has_restarted = !has_restarted;
+            counter++;
         }
     }
-    // Restart one last time if needs_restart_ = true
-    boost::lock_guard<boost::mutex> lock(restart_mutex_);
-    if (needs_restart_)
+    // stop even if there are any requests pending, but don't forget to restart if
+    // some have already been processed
+    if (counter > 0)
     {
         restart_service();
-        needs_restart_ = false; // Not really required
     }
 }
 
-void ServiceDBusHandler::start_worker()
+void DeviceHandler::start_worker()
 {
-    std::cerr << "starting ServiceDbusHandler..." << '\n';
-    t_ = boost::thread(&ServiceDBusHandler::run_worker, this);
+    std::cerr << "starting DeviceHandler..." << '\n';
+    running_.store(true, std::memory_order_relaxed);
+    t_ = boost::thread(&DeviceHandler::run_worker, this);
 }
 
-void ServiceDBusHandler::stop_worker()
+void DeviceHandler::stop_worker()
 {
-    running_ = false;
-    restart_cv_.notify_one();
-    inst_cv_.notify_one();
+    running_.store(false, std::memory_order_relaxed);
     if (t_.joinable())
     {
-        std::cerr << "shutting down the ServiceDBusHandler..." << '\n';
+        std::cerr << "shutting down the DeviceHandler..." << '\n';
         t_.join();
     }
-    std::cerr << "shutdown of ServiceDBusHandler complete..." << '\n';
+    std::cerr << "shutdown of DeviceHandler complete..." << '\n';
 }
 
-void ServiceDBusHandler::restart_service()
+bool DeviceHandler::process_request()
+{
+    uuid key;
+    bool success = false;
+    if (req_.pop(key))
+    {
+        // May fail even with strong
+        auto it = hmap_->find(key, false);
+        auto pair = *it;
+        if (pair.has_value())
+        {
+            PeerRequest value{std::get<1>(pair.value())};
+            // Actual process here
+            Peer *peer = new Peer();
+            peer->set_endpoint(endpoint_);
+            Credentials *creds = new Credentials();
+            creds->set_pub_key(b64_device_pub_);
+            creds->set_pre_shared_key(value.peer_creds.pre_shared_key());
+            peer->set_allocated_creds(creds);
+            value.peer_config.set_allocated_peer(peer);
+            for (auto each : dns_)
+            {
+                value.peer_config.add_dns(each);
+            }
+
+            std::pair<hash_map::Iterator, bool> res;
+            do
+            {
+                res = hmap_->update(std::pair(key, value));
+                // keep looping till contention issue gets resolved
+            } while (res.second == false && res.first != hmap_->end());
+            success = true;
+        }
+    }
+    return success;
+}
+
+DeviceHandler &DeviceHandler::operator<<(PeerRequest &peer_req)
+{
+
+}
+
+void DeviceHandler::restart_service()
 {
     try
     {
@@ -222,7 +253,7 @@ void ServiceDBusHandler::restart_service()
     }
 }
 
-bool ServiceDBusHandler::is_service()
+bool DeviceHandler::is_service()
 {
     if (!is_service_)
     {
@@ -257,49 +288,41 @@ bool ServiceDBusHandler::is_service()
     return is_service_;
 }
 
-void ServiceDBusHandler::trigger_restart_service()
+std::optional<uuid> DeviceHandler::add_peer_request(PeerRequest &&peer_req)
 {
     // Transporting worker exception to main/gRPC thread
     if (worker_exp_)
     {
         std::rethrow_exception(worker_exp_);
     }
+    uuid key(rgen());
+    auto res = hmap_->insert(std::make_pair(key, std::move(peer_req)));
+    if (std::get<1>(res))
     {
-        boost::lock_guard<boost::mutex> lock(restart_mutex_);
-        needs_restart_ = true;
+        return std::optional<uuid>(std::move(key));
     }
-    restart_cv_.notify_one();
-    std::cerr << "notified worker thread..." << '\n';
+    return std::optional<uuid>();
 }
 
-std::weak_ptr<ServiceDBusHandler> ServiceDBusHandler::get_instance(std::string service_nm)
+std::weak_ptr<DeviceHandler> DeviceHandler::get_instance(std::string device_nm)
 {
     boost::lock_guard<boost::mutex> lock(inst_mutex_);
     if (!instance_)
     {
-        instance_ = std::make_shared<ServiceDBusHandler>(service_nm);
+        instance_ = std::make_shared<DeviceHandler>(device_nm);
     }
     return instance_;
 }
 
-void ServiceDBusHandler::forget_instance()
+void DeviceHandler::forget_instance()
 {
-    std::shared_ptr<ServiceDBusHandler> temp = nullptr;
-    temp.reset();
-    {
-        boost::lock_guard<boost::mutex> lock(inst_mutex_);
-        if (instance_)
-        {
-            instance_.swap(temp);
-        }
-    }
-    // Might not be deleted here, some other weak_ptr
-    // holder might have upgraded to shared_ptr.
-    // TODO: Fix this somehow, or change from Singleton pattern
-    temp = nullptr;
+    boost::lock_guard<boost::mutex> lock(inst_mutex_);
+    // Might not be deleted here, some other weak_ptr holder
+    // might have upgraded temporarily to shared_ptr before then.
+    instance_ = nullptr;
 }
 
-ServiceDBusHandler::~ServiceDBusHandler()
+DeviceHandler::~DeviceHandler()
 {
     stop_worker();
 }
