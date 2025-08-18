@@ -1,6 +1,5 @@
 #pragma once
-
-#include <boost/predef/architecture.h>
+#define FHASH_MAP_H
 
 #include <atomic>
 #include <memory>
@@ -8,20 +7,10 @@
 #include <optional>
 #include <tuple>
 
-#define SPIN_LIMIT 100
-
-inline void pause_spin()
-{
-#ifdef BOOST_ARCH_X86
-    __builtin_ia32_pause();
-#elif defined(BOOST_ARCH_ARM)
-    __yield();
-#else
-    // This is a scheduling method, will be way too slow and wrong
-    // on many levels.
-    // std::this_thread::yield();
-#endif
-}
+#define EMPTY_STATE (1)
+#define FILLED_STATE (1 << 1)
+#define LOCKED_STATE (1 << 2)
+#define DESTROYED_STATE (1 << 3)
 
 /**
  * Basic attempt at creating lock-free hashmap.
@@ -33,8 +22,8 @@ inline void pause_spin()
  * NOTE: spriously fails at reads with optional result
  * TODO: Testing, Benchmark this wrt mutex
  */
-template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn,
-          typename EqualityKeyFn = std::equal_to<KeyT>, typename AllocatorValueT = std::allocator<ValueT>>
+template <class KeyT, class ValueT, class HashFn, class ProbeFn, class EqualityKeyFn = std::equal_to<KeyT>,
+          class AllocatorValueT = std::allocator<ValueT>>
 class FixedSizeLockFreeHashMap
 {
   public:
@@ -42,15 +31,21 @@ class FixedSizeLockFreeHashMap
                   "KeyT needs to be copy and move assignable");
     static_assert(std::is_copy_assignable<ValueT>::value && std::is_move_assignable<ValueT>::value,
                   "ValueT needs to be copy and move assignable");
-    static_assert(std::is_invocable_r<size_t, HashFn, const KeyT &>::value, "Invalid HashFn");
-    static_assert(std::is_invocable_r<size_t, ProbeFn, size_t, size_t>::value, "Invalid ProbeFn");
-    static_assert(std::is_invocable_r<bool, EqualityKeyFn, const KeyT &, const KeyT &>::value, "Invalid EqualityKeyFn");
+    // static_assert(std::is_invocable_r<size_t, decltype(HashFn), const decltype(KeyT &)>::value, "Invalid HashFn");
+    // static_assert(std::is_invocable_r<size_t, decltype(ProbeFn), size_t, size_t>::value, "Invalid ProbeFn");
+    // static_assert(std::is_invocable_r<bool, decltype(EqualityKeyFn), const KeyT &, const KeyT &>::value, "Invalid
+    // EqualityKeyFn");
 
     typedef std::pair<const KeyT, ValueT> ValuePair;
     typedef std::optional<ValuePair> OptionalValuePair;
 
+  private:
+    static void destroy(FixedSizeLockFreeHashMap *ptr);
+
+  public:
     class Deleter
     {
+      public:
         void operator()(FixedSizeLockFreeHashMap *ptr)
         {
             destroy(ptr);
@@ -77,8 +72,11 @@ class FixedSizeLockFreeHashMap
 
         Iterator(FixedSizeLockFreeHashMap *m, size_t i, bool w = true) : hmap_(m), idx_(i), weak_(w)
         {
+            skip_empty();
         }
-        Iterator() : Iterator(nullptr, -1);
+        Iterator() : Iterator(nullptr, -1)
+        {
+        }
 
         // mostly to differentiate end() and invalid()
         // discard weak comparison
@@ -130,7 +128,6 @@ class FixedSizeLockFreeHashMap
 
     static const size_t kcapacity_max = 512 - 1;
 
-    static void destroy(FixedSizeLockFreeHashMap *ptr);
     static SomePointer create(int capacity = kcapacity_max);
 
     // If the bool is false, and iterator == end() then capacity limit reached
@@ -156,9 +153,7 @@ class FixedSizeLockFreeHashMap
 
     Iterator begin()
     {
-        Iterator it(this, 0);
-        it.skip_empty();
-        return it;
+        return Iterator(this, 0);
     }
 
     // just to differentiate between insert/update spurious failures from failures
@@ -182,14 +177,26 @@ class FixedSizeLockFreeHashMap
     // based on cpu-arch
     class Track
     {
+      public:
         uint8_t state;
         uint8_t version;
-        static const uint8_t kempty_state = 1;
-        static const uint8_t kfilled_state = 1 << 1;
-        static const uint8_t klocked_state = 1 << 2;
-        static const uint8_t kdestroyed_state = 1 << 3;
-    } class Entry
+        inline bool operator==(const Track &rhs)
+        {
+            return (state == rhs.state && version == rhs.version);
+        }
+        inline bool operator!=(const Track &rhs)
+        {
+            return !(*this == rhs);
+        }
+        // static const uint8_t kempty_state = 1;
+        // static const uint8_t kfilled_state = 1 << 1;
+        // static const uint8_t klocked_state = 1 << 2;
+        // static const uint8_t kdestroyed_state = 1 << 3;
+    };
+
+    class Entry
     {
+      public:
         KeyT key;
         ValueT *value;
         // Force the alignment of atomic onto a separate cacheline to prevent false
@@ -217,3 +224,5 @@ class FixedSizeLockFreeHashMap
     FixedSizeLockFreeHashMap(size_t capacity);
     ~FixedSizeLockFreeHashMap();
 };
+
+#include "hash_map.inl"

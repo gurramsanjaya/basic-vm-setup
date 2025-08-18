@@ -1,12 +1,30 @@
 
+#ifndef FHASH_MAP_H
 #include "hash_map.h"
+#endif /** FHASH_MAP_H */
 
+#include <boost/predef/architecture.h>
 #include <iterator>
+
+#define SPIN_LIMIT 100
+
+inline void pause_spin()
+{
+#ifdef BOOST_ARCH_X86
+    __builtin_ia32_pause();
+#elif defined(BOOST_ARCH_ARM)
+    __yield();
+#else
+    // This is a scheduling method, will be way too slow and wrong
+    // on many levels.
+    // std::this_thread::yield();
+#endif
+}
 
 #define ERROR_ON_DESTROYED(track)                                                                                      \
     do                                                                                                                 \
     {                                                                                                                  \
-        if (track.state & Track::kdestroyed_state)                                                                     \
+        if (track.state & DESTROYED_STATE)                                                                     \
         {                                                                                                              \
             throw std::runtime_error("use after destructor call");                                                     \
         }                                                                                                              \
@@ -15,19 +33,20 @@
 /**
  * Class FixedSizeLockFreeHashMap
  */
-template <class KeyT, class ValueT, class HashFn, class ProbeFn, class EqualityKeyFn, class AllocatorValueT>
+template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn, typename EqualityKeyFn,
+          typename AllocatorValueT>
 void FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::destroy(
     FixedSizeLockFreeHashMap *ptr)
 {
     size_t a_size = get_final_aligned_size(ptr->capacity_);
     ptr->~FixedSizeLockFreeHashMap();
-    std::allocator<uint8_t>().deallocate(ptr, a_size);
+    std::allocator<uint8_t>().deallocate((uint8_t *)ptr, a_size);
 }
 
-template <class KeyT, class ValueT, class HashFn, class ProbeFn, class EqualityKeyFn, class AllocatorValueT>
-FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::SomePointer
-FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::create(
-    int capacity = kcapacity_max)
+template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn, typename EqualityKeyFn,
+          typename AllocatorValueT>
+typename FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::SomePointer
+FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::create(int capacity)
 {
     size_t a_size = get_final_aligned_size(capacity);
     uint8_t *mem = std::allocator<uint8_t>().allocate(a_size);
@@ -41,7 +60,7 @@ FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Allocator
         throw;
     }
     SomePointer some_ptr(static_cast<FixedSizeLockFreeHashMap *>((void *)mem));
-    Track init{Track::kempty_state, 0};
+    Track init{EMPTY_STATE, 0};
     for (int i = 0; i < some_ptr->capacity_; i++)
     {
         some_ptr->map_[i].track.store(init, std::memory_order_relaxed);
@@ -49,10 +68,11 @@ FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Allocator
     return some_ptr;
 }
 
-template <class KeyT, class ValueT, class HashFn, class ProbeFn, class EqualityKeyFn, class AllocatorValueT>
-FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::OptionalValuePair
-FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::get_value_pair(
-    size_t idx, bool weak = true)
+template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn, typename EqualityKeyFn,
+          typename AllocatorValueT>
+typename FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::OptionalValuePair
+FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::get_value_pair(size_t idx,
+                                                                                                        bool weak)
 {
     Track ctrack, ntrack;
     if (idx < 0 || idx >= capacity_)
@@ -61,7 +81,7 @@ FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Allocator
         return OptionalValuePair();
     }
     ctrack = map_[idx].track.load(std::memory_order_acquire);
-    if (ctrack.state == Track::kempty_state)
+    if (ctrack.state == EMPTY_STATE)
     {
         // Should really not come here
         return OptionalValuePair();
@@ -69,21 +89,21 @@ FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Allocator
     if (weak)
     {
         // If its the special state, destructor has been called...
-    ERROR_ON_DESTROYED(ctrack));
-    if (ctrack.state == Track::kfilled_state)
-    {
-        // only when its not locked and filled try getting it
-        KeyT ckey = map_[idx].key;
-        ValueT cvalue = map_[idx].value *;
-        // weird load-release, but necessary. doesn't reorder the above key, value
-        // copy below this
-        ntrack = map_[idx].track.load(std::memory_order_release);
-        if (ntrack == ctrack)
+        ERROR_ON_DESTROYED(ctrack);
+        if (ctrack.state == FILLED_STATE)
         {
-            // success only when both state and version(ABA issue) is the same
-            return OptionalValuePair(ckey, cvalue);
+            // only when its not locked and filled try getting it
+            KeyT ckey = map_[idx].key;
+            ValueT cvalue = *(map_[idx].value);
+            // weird load-release, but necessary. doesn't reorder the above key, value
+            // copy below this
+            ntrack = map_[idx].track.load(std::memory_order_release);
+            if (ntrack == ctrack)
+            {
+                // success only when both state and version(ABA issue) is the same
+                return OptionalValuePair(ValuePair(ckey, cvalue));
+            }
         }
-    }
     }
     else
     {
@@ -91,15 +111,15 @@ FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Allocator
         {
             // If its the special state, destructor has been called...
             ERROR_ON_DESTROYED(ctrack);
-            if (ctrack.state == Track::kfilled_state)
+            if (ctrack.state == FILLED_STATE)
             {
                 KeyT ckey = map_[idx].key;
-                ValueT cvalue = map_[idx].value *;
+                ValueT cvalue = *(map_[idx].value);
                 // load-acq-rel instead of 2 loads per iteratoion
                 ntrack = map_[idx].track.load(std::memory_order_acq_rel);
                 if (ntrack == ctrack)
                 {
-                    return OptionalValuePair(ckey, cvalue);
+                    return OptionalValuePair(ValuePair(ckey, cvalue));
                 }
                 else
                 {
@@ -119,16 +139,18 @@ FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Allocator
     return OptionalValuePair();
 }
 
-template <class KeyT, class ValueT, class HashFn, class ProbeFn, class EqualityKeyFn, class AllocatorValueT>
+template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn, typename EqualityKeyFn,
+          typename AllocatorValueT>
 bool FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::isNotEmpty(size_t idx)
 {
     Track ctrack = map_[idx].track.load(std::memory_order_relaxed);
     // If its the special state, destructor has been called...
     ERROR_ON_DESTROYED(ctrack);
-    return !(ctrack.state & Track::kempty_state);
+    return !(ctrack.state & EMPTY_STATE);
 }
 
-template <class KeyT, class ValueT, class HashFn, class ProbeFn, class EqualityKeyFn, class AllocatorValueT>
+template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn, typename EqualityKeyFn,
+          typename AllocatorValueT>
 size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::find_internal(
     const KeyT &fkey)
 {
@@ -141,7 +163,7 @@ size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Al
         ctrack = map_[idx].track.load(std::memory_order_acquire);
         // If its the special state, destructor has been called...
         ERROR_ON_DESTROYED(ctrack);
-        if (!(ctrack.state & Track::kempty_state) && EqualityKeyFn()(fkey, map_[idx].key))
+        if (!(ctrack.state & EMPTY_STATE) && EqualityKeyFn()(fkey, map_[idx].key))
         {
             return idx;
         }
@@ -153,11 +175,12 @@ size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Al
     return capacity_;
 }
 
-template <class KeyT, class ValueT, class HashFn, class ProbeFn, class EqualityKeyFn, class AllocatorValueT>
+template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn, typename EqualityKeyFn,
+          typename AllocatorValueT>
 size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::insert_internal(
     ValuePair &&value_pair)
 {
-    Track ctrack, ntrack{Track::klocked_state, 0};
+    Track ctrack, ntrack{LOCKED_STATE, 0};
     size_t idx = HashFn()(std::get<0>(value_pair)) % capacity_;
     for (size_t retries = 0; retries < capacity_; retries++)
     {
@@ -172,7 +195,7 @@ size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Al
         {
             // If its the special state, destructor has been called...
             ERROR_ON_DESTROYED(ctrack);
-            if (ctrack.state & (Track::kempty_state && Track::klocked_state))
+            if (ctrack.state & (EMPTY_STATE | LOCKED_STATE) == (EMPTY_STATE | LOCKED_STATE))
             {
                 // Not reachable currenlty, but technically it means someone else has
                 // got this
@@ -181,16 +204,16 @@ size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Al
             pause_spin();
             // Try looping as long as empty state. Needs acquire to keep insertion
             // logic that is below this to not be reordered above this
-        } while (
-            (ctrack.state == Track::kempty_state) &&
-            !map_[i].track.compare_exchange_weak(ctrack, ntrack, std::memory_order_acquire, std::memory_order_relaxed));
-        if (ctrack.state == Track::kempty_state)
+        } while ((ctrack.state == EMPTY_STATE) &&
+                 !map_[idx].track.compare_exchange_weak(ctrack, ntrack, std::memory_order_acquire,
+                                                        std::memory_order_relaxed));
+        if (ctrack.state == EMPTY_STATE)
         {
             // Actual insertion here, copy assignment
             map_[idx].key = std::get<0>(value_pair);
             map_[idx].value = AllocatorValueT().allocate(1);
             *(map_[idx].value) = std::get<1>(value_pair);
-            ntrack = {Track::kfilled_state, 1};
+            ntrack = {FILLED_STATE, 1};
             map_[idx].track.store(ntrack, std::memory_order_release);
             size_.fetch_add(1, std::memory_order_relaxed);
             return idx;
@@ -203,19 +226,20 @@ size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Al
     return capacity_;
 }
 
-template <class KeyT, class ValueT, class HashFn, class ProbeFn, class EqualityKeyFn, class AllocatorValueT>
+template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn, typename EqualityKeyFn,
+          typename AllocatorValueT>
 size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::update_internal(
     ValuePair &&value_pair)
 {
-    Track ctrack, ntrack{Track::kfilled_state | Track::klocked_state, 0};
+    Track ctrack, ntrack{FILLED_STATE | LOCKED_STATE, 0};
     size_t idx = HashFn()(std::get<0>(value_pair)) % capacity_;
-    for (int retries = 0; retries < capacity_; retries++)
+    for (size_t retries = 0; retries < capacity_; retries++)
     {
         // Need to acquire for key comparison check, might be recently added key
-        ctrack = map_[i].track.load(std::memory_order_acquire);
+        ctrack = map_[idx].track.load(std::memory_order_acquire);
         // If its the special state, destructor has been called...
         ERROR_ON_DESTROYED(ctrack);
-        if (!(ctrack.state & Track::kempty_state) && EqualityKeyFn()(std::get<0>(value_pair), map_[idx].key))
+        if (!(ctrack.state & EMPTY_STATE) && EqualityKeyFn()(std::get<0>(value_pair), map_[idx].key))
         {
             for (int i = 0; i < SPIN_LIMIT; i++)
             {
@@ -223,7 +247,7 @@ size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Al
                 ntrack.version = ctrack.version + 1;
                 // If its the special state, destructor has been called...
                 ERROR_ON_DESTROYED(ctrack);
-                if (ctrack.state & Track::klocked_state)
+                if (ctrack.state & LOCKED_STATE)
                 {
                     // wait till its unlocked before exchanging
                     ctrack = map_[i].track.load(std::memory_order_relaxed);
@@ -233,8 +257,8 @@ size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Al
                                                              std::memory_order_relaxed))
                 {
                     // Actual update here
-                    map_[i].value * = std::get<1>(value_pair);
-                    ntrack = {Track::kfilled_state, ntrack.version};
+                    *(map_[i].value) = std::get<1>(value_pair);
+                    ntrack = {FILLED_STATE, ntrack.version};
                     map_[i].track.store(ntrack, std::memory_order_release);
                     return idx;
                 }
@@ -250,7 +274,8 @@ size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Al
     return capacity_;
 }
 
-template <class KeyT, class ValueT, class HashFn, class ProbeFn, class EqualityKeyFn, class AllocatorValueT>
+template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn, typename EqualityKeyFn,
+          typename AllocatorValueT>
 FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::FixedSizeLockFreeHashMap(
     size_t capacity)
     : capacity_(capacity), size_(0)
@@ -258,10 +283,11 @@ FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Allocator
 }
 
 // We should really not have contention in the destructor...
-template <class KeyT, class ValueT, class HashFn, class ProbeFn, class EqualityKeyFn, class AllocatorValueT>
+template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn, typename EqualityKeyFn,
+          typename AllocatorValueT>
 FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::~FixedSizeLockFreeHashMap()
 {
-    Track ctrack, ftrack{Track::kdestroyed_state, 0};
+    Track ctrack, ftrack{DESTROYED_STATE, 0};
     for (int i = 0; i < capacity_; i++)
     {
         ctrack = map_[i].track.load(std::memory_order_relaxed);
@@ -269,12 +295,12 @@ FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Allocator
         while (true)
         {
             pause_spin();
-            if (ctrack.state & Track::kdestroyed_state)
+            if (ctrack.state & DESTROYED_STATE)
             {
                 // Impossibru!
                 break;
             }
-            else if (ctrack.state & Track::klocked_state)
+            else if (ctrack.state & LOCKED_STATE)
             {
                 // By Azura, by Azura, by Azura! It's the Grand Champion!
                 ctrack = map_[i].track.load(std::memory_order_relaxed);
@@ -288,10 +314,10 @@ FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Allocator
             }
         }
         // deallocate ValueT if the previous state was filled
-        if (ctrack.state == Track::kfilled_state)
+        if (ctrack.state == FILLED_STATE)
         {
             map_[i].value->~ValueT();
-            AllocatorValueT().deallocate(map_[i].value);
+            AllocatorValueT().deallocate(map_[i].value, sizeof(ValueT));
         }
     }
 }

@@ -1,10 +1,10 @@
 #include "conf_update.h"
 
-ConfUpdater &ConfUpdater::operator<<(const Peer &peer)
+ConfUpdater &ConfUpdater::update_conf(const Peer &peer)
 {
 
     boost::lock_guard<boost::interprocess::file_lock> lock(fl_);
-    auto conf_fstrm = boost::filesystem::ofstream(conf_fnm_);
+    auto conf_fstrm = boost::filesystem::ofstream(conf_pth_, std::ios_base::app);
     conf_fstrm << '\n';
     conf_fstrm << "[Peer]" << '\n';
     conf_fstrm << "AllowedIps = ";
@@ -27,30 +27,48 @@ ConfUpdater &ConfUpdater::operator<<(const Peer &peer)
     return *this;
 }
 
-ConfUpdater &ConfUpdater::operator<<(const std::tuple<po::variables_map, const std::string, const std::string> tuple)
+// Server variant
+ConfUpdater &ConfUpdater::update_conf(const po::variables_map &vm, const std::string &priv_key)
 {
     boost::lock_guard<boost::interprocess::file_lock> lock(fl_);
-    auto conf_fstrm = boost::filesystem::ofstream(conf_fnm_);
-    auto vm = std::get<0>(tuple);
+    auto conf_fstrm = boost::filesystem::ofstream(conf_pth_, std::ios_base::app);
     conf_fstrm << "[Interface]" << '\n';
     for (auto p : intrfc_keys_.list)
     {
         conf_fstrm << generate_interface_line(p, vm);
     }
-    // Server doesn't need the dns
-    if (!server_)
+    conf_fstrm << "PrivateKey = " << priv_key << '\n' << '\n';
+    return *this;
+}
+
+// Client variant
+ConfUpdater &ConfUpdater::update_conf(const po::variables_map &vm,
+                                      const google::protobuf::RepeatedPtrField<Address> &addr_list,
+                                      const std::string &priv_key, const std::string &dns)
+{
+    boost::lock_guard<boost::interprocess::file_lock> lock(fl_);
+    auto conf_fstrm = boost::filesystem::ofstream(conf_pth_, std::ios_base::app);
+    conf_fstrm << "[Interface]" << '\n';
+    for (auto p : intrfc_keys_.list)
     {
-        std::string dns_line = generate_interface_line("DNS", vm);
-        if (dns_line.length() > 0)
+        if (p == "Address")
         {
-            conf_fstrm << dns_line;
+            for (auto p : addr_list)
+            {
+                conf_fstrm << "Address = " << p.addr() << p.mask() << '\n';
+            }
+        }
+        else if (p == "DNS" && dns.length() > 0)
+        {
+            // Overwrite using incoming from the server
+            conf_fstrm << "DNS = " << dns << '\n';
         }
         else
         {
-            conf_fstrm << "DNS = " << std::get<2>(tuple) << '\n';
+            conf_fstrm << generate_interface_line(p, vm);
         }
     }
-    conf_fstrm << "PrivateKey = " << std::get<1>(tuple) << '\n' << '\n';
+    conf_fstrm << "PrivateKey = " << priv_key << '\n' << '\n';
     return *this;
 }
 
@@ -60,9 +78,9 @@ std::string ConfUpdater::generate_interface_line(const std::string &param, const
     std::stringstream ss;
     if (vm.count(key))
     {
-        return "";
+        ss << "";
     }
-    if (vm[key].value().type() == boost::typeindex::type_id<std::vector<std::string>>())
+    else if (vm[key].value().type() == boost::typeindex::type_id<std::vector<std::string>>())
     {
         for (auto p : vm[key].as<std::vector<std::string>>())
         {
@@ -71,7 +89,7 @@ std::string ConfUpdater::generate_interface_line(const std::string &param, const
     }
     else
     {
-        ss << param << " = " << vm[key].as<std::string>() + '\n';
+        ss << param << " = " << vm[key].as<std::string>() << '\n';
     }
     return ss.str();
 }

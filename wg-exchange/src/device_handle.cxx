@@ -1,5 +1,8 @@
+#include <unistd.h>
 #include <iostream>
 #include <vector>
+
+#include "ext_hacl_star/Hacl_Curve25519_51.h"
 
 #define VAL_MSG_ITR_GET(val, itr, get_func, ...)                                                                       \
     do                                                                                                                 \
@@ -139,19 +142,6 @@ class DeviceHandler::SystemdManager : public ObjectProxy
 /**
  * Class DeviceHandler
  */
-DeviceHandler::DeviceHandler(std::string device_nm)
-    : device_nm_(std::move(device_nm)), device_fnm_("/etc/wireguard/" + device_nm + ".conf"),
-      service_nm_("wg-quick@" + device_nm_ + ".service")
-{
-    if (!boost::filesystem::is_regular_file(device_fnm_))
-    {
-        throw std::runtime_error("not a regular file: " + device_fnm_);
-    }
-    dispatch_ = DBus::StandaloneDispatcher::create();
-    conn_ = dispatch_->create_connection(DBus::BusType::SYSTEM);
-    obj_ = SystemdManager::create(conn_);
-}
-
 // I'll rework this soon, such that the restart_service is run only once maybe
 void DeviceHandler::run_worker()
 {
@@ -221,7 +211,9 @@ bool DeviceHandler::process_request()
                 value.peer_config.add_dns(each);
             }
 
-            std::pair<hash_map::Iterator, bool> res;
+            conf_updater_->update_conf(*peer);
+
+            std::pair<fhash_map::Iterator, bool> res;
             do
             {
                 res = hmap_->update(std::pair(key, value));
@@ -253,14 +245,36 @@ void DeviceHandler::restart_service()
     }
 }
 
-bool DeviceHandler::is_service()
+bool DeviceHandler::setup(po::variables_map& vmap)
 {
-    if (!is_service_)
+    if (!is_setup_)
     {
+        conf_updater_ = std::make_shared<ConfUpdater>(device_pth_);
+
+        uint8_t key[WG_KEY_LEN], pub_key[WG_KEY_LEN];
+        char base64_pub[WG_KEY_LEN_BASE64], base64_key[WG_KEY_LEN_BASE64];
+
+        if(!generate_random_key(key)) {
+            throw std::runtime_error("key generation failed");
+        }
+        Hacl_Curve25519_51_secret_to_public(pub_key, key);
+
+        key_to_base64(base64_key, key);
+        key_to_base64(base64_pub, pub_key);
+
+        std::string b64_device_key {base64_key, WG_KEY_LEN_BASE64};
+        conf_updater_->update_conf(vmap, b64_device_key);
+        b64_device_pub_ = std::string(base64_pub, WG_KEY_LEN_BASE64);
+
+
+        dispatch_ = DBus::StandaloneDispatcher::create();
+        conn_ = dispatch_->create_connection(DBus::BusType::SYSTEM);
+        obj_ = SystemdManager::create(conn_);
+
         try
         {
             obj_->get_unit(service_nm_);
-            is_service_ = true;
+            is_setup_ = true;
         }
         catch (const std::exception &e)
         {
@@ -279,13 +293,13 @@ bool DeviceHandler::is_service()
             boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
 
             obj_->get_unit(service_nm_);
-            is_service_ = true;
+            is_setup_ = true;
         }
 
         // Starting the separate thread here instead of the constructor
         start_worker();
     }
-    return is_service_;
+    return is_setup_;
 }
 
 std::optional<uuid> DeviceHandler::add_peer_request(PeerRequest &&peer_req)
@@ -302,27 +316,4 @@ std::optional<uuid> DeviceHandler::add_peer_request(PeerRequest &&peer_req)
         return std::optional<uuid>(std::move(key));
     }
     return std::optional<uuid>();
-}
-
-std::weak_ptr<DeviceHandler> DeviceHandler::get_instance(std::string device_nm)
-{
-    boost::lock_guard<boost::mutex> lock(inst_mutex_);
-    if (!instance_)
-    {
-        instance_ = std::make_shared<DeviceHandler>(device_nm);
-    }
-    return instance_;
-}
-
-void DeviceHandler::forget_instance()
-{
-    boost::lock_guard<boost::mutex> lock(inst_mutex_);
-    // Might not be deleted here, some other weak_ptr holder
-    // might have upgraded temporarily to shared_ptr before then.
-    instance_ = nullptr;
-}
-
-DeviceHandler::~DeviceHandler()
-{
-    stop_worker();
 }

@@ -9,6 +9,7 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 
+#include "conf_update.h"
 #include "hash_map.h"
 #include "wg_exchange.h"
 
@@ -24,6 +25,7 @@ class PeerRequest
 // basic Hash and Probe functions
 class HashFn
 {
+  public:
     size_t operator()(const uuid &key)
     {
         return boost::uuids::hash_value(key);
@@ -32,17 +34,21 @@ class HashFn
 
 class ProbeFn
 {
+  public:
     size_t operator()(int idx, int retries)
     {
         return idx + retries;
     }
 };
 
+// Explicit initialization
+template class FixedSizeLockFreeHashMap<uuid, PeerRequest, HashFn, ProbeFn>;
+typedef FixedSizeLockFreeHashMap<uuid, PeerRequest, HashFn, ProbeFn> fhash_map;
+
 class DeviceHandler
 {
 
   private:
-    typedef FixedSizeLockFreeHashMap<uuid, PeerRequest, HashFn, ProbeFn> hash_map;
     class SystemdManager;
 
     std::string device_nm_;
@@ -52,12 +58,12 @@ class DeviceHandler
     std::shared_ptr<DBus::Dispatcher> dispatch_ = nullptr;
     std::shared_ptr<DBus::Connection> conn_ = nullptr;
     std::shared_ptr<SystemdManager> obj_ = nullptr;
-    bool is_service_ = false;
+    bool is_setup_ = false;
 
-    std::string device_fnm_;
-    boost::interprocess::file_lock fl;
+    std::string device_pth_;
+    std::shared_ptr<ConfUpdater> conf_updater_ = nullptr;
     boost::lockfree::queue<uuid> req_;
-    std::unique_ptr<hash_map> hmap_ = nullptr;
+    fhash_map::SomePointer hmap_ = nullptr;
     std::string b64_device_pub_;
     std::string endpoint_;
     std::vector<std::string> dns_;
@@ -78,15 +84,36 @@ class DeviceHandler
 
   public:
     DeviceHandler() = delete;
-    // TODO: Move this to protected without breaking std::make_shared
-    DeviceHandler(std::string device_nm);
 
-    // TODO: Should I make this call every single time the service is to be
-    // restarted? Mainly as a check to see if external forces have
-    // modified/deleted the service.
-    bool is_service();
+    DeviceHandler(std::string device_nm)
+        : device_nm_(std::move(device_nm)), device_pth_("/etc/wireguard/" + device_nm_ + ".conf"),
+          service_nm_("wg-quick@" + device_nm_ + ".service"), hmap_{fhash_map::create(31)}
+    {
+    }
+
+    ~DeviceHandler()
+    {
+        stop_worker();
+    }
+
+    static std::weak_ptr<DeviceHandler> get_instance(std::string device_nm = "")
+    {
+        boost::lock_guard<boost::mutex> lock(inst_mutex_);
+        if (!instance_)
+        {
+            instance_ = std::make_shared<DeviceHandler>(device_nm);
+        }
+        return instance_;
+    }
+
+    static void forget_instance()
+    {
+        boost::lock_guard<boost::mutex> lock(inst_mutex_);
+        // Might not be deleted here, some other weak_ptr holder
+        // might have upgraded temporarily to shared_ptr before then.
+        instance_ = nullptr;
+    }
+
+    bool setup(po::variables_map &);
     std::optional<uuid> add_peer_request(PeerRequest &&);
-    static std::weak_ptr<DeviceHandler> get_instance(std::string device_nm = "");
-    static void forget_instance();
-    ~DeviceHandler();
 };

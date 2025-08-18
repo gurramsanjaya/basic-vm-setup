@@ -17,10 +17,11 @@ namespace po = boost::program_options;
  */
 class StaticInterfaceKeys
 {
+  protected:
     std::vector<std::string> list;
     StaticInterfaceKeys()
     {
-        list = {"Address", "ListenPort", "FwMark", "PreUp", "PostUp", "PreDown", "PostDown"};
+        list = {"Address", "ListenPort", "DNS", "FwMark", "PreUp", "PostUp", "PreDown", "PostDown"};
     }
     friend class ConfUpdater;
 };
@@ -31,24 +32,41 @@ class StaticInterfaceKeys
 class ConfUpdater
 {
   private:
-    std::string conf_fnm_;
+    boost::filesystem::path conf_pth_;
     boost::interprocess::file_lock fl_;
-    bool server_;
-    const static StaticInterfaceKeys intrfc_keys_;
+    inline const static StaticInterfaceKeys intrfc_keys_;
 
   public:
     ConfUpdater() = delete;
-    ConfUpdater(std::string conf_fnm, bool is_server) : conf_fnm_(conf_fnm), server_(is_server)
+    ConfUpdater(std::string conf_pth) : conf_pth_(conf_pth)
     {
-        if (!boost::filesystem::is_regular_file(conf_fnm))
+        if (!boost::filesystem::is_regular_file(conf_pth_))
         {
-            throw std::invalid_argument(conf_fnm + " isn't a regular file");
+            const boost::filesystem::path prnt_pth = conf_pth_.parent_path();
+            if (prnt_pth == conf_pth_)
+            {
+                throw std::invalid_argument("invalid conf path");
+            }
+            boost::filesystem::create_directories(prnt_pth);
+            (boost::filesystem::ofstream(conf_pth_));
+        }
+        else
+        {
+            (boost::filesystem::ofstream(conf_pth_, std::ios_base::trunc));
         }
     }
-    ConfUpdater &operator<<(const Peer &);
-    // Tuple consisting of variable_map, private key, dns if any
-    ConfUpdater &operator<<(const std::tuple<po::variables_map, const std::string, const std::string>);
+    // operator<<() is very limited in the number of arguments it can take
+    // using equivalent method that does the same, but with overloading
+    ConfUpdater &update_conf(const Peer &peer);
+
+    // Server usage only
+    ConfUpdater &update_conf(const po::variables_map &vmap, const std::string &priv_key);
+
+    // Client usage only
+    ConfUpdater &update_conf(const po::variables_map &vmap,
+                             const google::protobuf::RepeatedPtrField<Address> &addr_list, const std::string &priv_key,
+                             const std::string &dns = "");
 
   private:
-    std::string generate_interface_line(const std::string &key, const po::variables_map &map);
+    std::string generate_interface_line(const std::string &key, const po::variables_map &vmap);
 };
