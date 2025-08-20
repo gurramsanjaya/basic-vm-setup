@@ -61,7 +61,7 @@ FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Allocator
     }
     SomePointer some_ptr(static_cast<FixedSizeLockFreeHashMap *>((void *)mem));
     Track init{EMPTY_STATE, 0};
-    for (int i = 0; i < some_ptr->capacity_; i++)
+    for (size_t i = 0; i < some_ptr->capacity_; i++)
     {
         some_ptr->map_[i].track.store(init, std::memory_order_relaxed);
     }
@@ -195,7 +195,7 @@ size_t FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, Al
         {
             // If its the special state, destructor has been called...
             ERROR_ON_DESTROYED(ctrack);
-            if (ctrack.state & (EMPTY_STATE | LOCKED_STATE) == (EMPTY_STATE | LOCKED_STATE))
+            if ((ctrack.state & (EMPTY_STATE | LOCKED_STATE)) == (EMPTY_STATE | LOCKED_STATE))
             {
                 // Not reachable currenlty, but technically it means someone else has
                 // got this
@@ -288,7 +288,7 @@ template <typename KeyT, typename ValueT, typename HashFn, typename ProbeFn, typ
 FixedSizeLockFreeHashMap<KeyT, ValueT, HashFn, ProbeFn, EqualityKeyFn, AllocatorValueT>::~FixedSizeLockFreeHashMap()
 {
     Track ctrack, ftrack{DESTROYED_STATE, 0};
-    for (int i = 0; i < capacity_; i++)
+    for (size_t i = 0; i < capacity_; i++)
     {
         ctrack = map_[i].track.load(std::memory_order_relaxed);
         // Spinnning... state shouldn't be locked here... we are destructing

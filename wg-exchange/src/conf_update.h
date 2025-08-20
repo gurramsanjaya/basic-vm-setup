@@ -33,7 +33,7 @@ class ConfUpdater
 {
   private:
     boost::filesystem::path conf_pth_;
-    boost::interprocess::file_lock fl_;
+    std::unique_ptr<boost::interprocess::file_lock> fl_ = nullptr;
     inline const static StaticInterfaceKeys intrfc_keys_;
 
   public:
@@ -54,7 +54,16 @@ class ConfUpdater
         {
             (boost::filesystem::ofstream(conf_pth_, std::ios_base::trunc));
         }
+        fl_ = std::make_unique<boost::interprocess::file_lock>(conf_pth_.c_str());
+        // Should throw an error if not able to acquire the file lock
+        fl_->lock();
     }
+
+    ~ConfUpdater()
+    {
+        fl_->unlock();
+    }
+
     // operator<<() is very limited in the number of arguments it can take
     // using equivalent method that does the same, but with overloading
     ConfUpdater &update_conf(const Peer &peer);

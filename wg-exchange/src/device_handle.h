@@ -3,9 +3,7 @@
 #include <dbus-cxx.h>
 #include <generated/wg_exchange.pb.h>
 
-#include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/lockfree/queue.hpp>
-#include <boost/thread.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 
@@ -62,17 +60,17 @@ class DeviceHandler
 
     std::string device_pth_;
     std::shared_ptr<ConfUpdater> conf_updater_ = nullptr;
-    boost::lockfree::queue<uuid> req_;
+    boost::lockfree::queue<uuid, boost::lockfree::capacity<100>> req_;
     fhash_map::SomePointer hmap_ = nullptr;
     std::string b64_device_pub_;
     std::string endpoint_;
     std::vector<std::string> dns_;
 
     std::atomic_bool running_;
-    boost::thread t_;
+    std::thread t_;
     std::exception_ptr worker_exp_ = nullptr;
 
-    inline static boost::mutex inst_mutex_;
+    inline static std::mutex inst_mutex_;
     inline static std::shared_ptr<DeviceHandler> instance_ = nullptr;
 
     void start_worker();
@@ -86,9 +84,11 @@ class DeviceHandler
     DeviceHandler() = delete;
 
     DeviceHandler(std::string device_nm)
-        : device_nm_(std::move(device_nm)), device_pth_("/etc/wireguard/" + device_nm_ + ".conf"),
-          service_nm_("wg-quick@" + device_nm_ + ".service"), hmap_{fhash_map::create(31)}
     {
+        device_nm_ = std::move(device_nm);
+        device_pth_ = "/etc/wireguard/" + device_nm_ + ".conf";
+        service_nm_ = "wg-quick@" + device_nm_ + ".service";
+        hmap_ = fhash_map::create(31);
     }
 
     ~DeviceHandler()
@@ -98,7 +98,7 @@ class DeviceHandler
 
     static std::weak_ptr<DeviceHandler> get_instance(std::string device_nm = "")
     {
-        boost::lock_guard<boost::mutex> lock(inst_mutex_);
+        std::lock_guard<std::mutex> lock(inst_mutex_);
         if (!instance_)
         {
             instance_ = std::make_shared<DeviceHandler>(device_nm);
@@ -108,7 +108,7 @@ class DeviceHandler
 
     static void forget_instance()
     {
-        boost::lock_guard<boost::mutex> lock(inst_mutex_);
+        std::lock_guard<std::mutex> lock(inst_mutex_);
         // Might not be deleted here, some other weak_ptr holder
         // might have upgraded temporarily to shared_ptr before then.
         instance_ = nullptr;

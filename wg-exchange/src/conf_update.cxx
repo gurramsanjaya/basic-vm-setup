@@ -3,7 +3,6 @@
 ConfUpdater &ConfUpdater::update_conf(const Peer &peer)
 {
 
-    boost::lock_guard<boost::interprocess::file_lock> lock(fl_);
     auto conf_fstrm = boost::filesystem::ofstream(conf_pth_, std::ios_base::app);
     conf_fstrm << '\n';
     conf_fstrm << "[Peer]" << '\n';
@@ -30,7 +29,6 @@ ConfUpdater &ConfUpdater::update_conf(const Peer &peer)
 // Server variant
 ConfUpdater &ConfUpdater::update_conf(const po::variables_map &vm, const std::string &priv_key)
 {
-    boost::lock_guard<boost::interprocess::file_lock> lock(fl_);
     auto conf_fstrm = boost::filesystem::ofstream(conf_pth_, std::ios_base::app);
     conf_fstrm << "[Interface]" << '\n';
     for (auto p : intrfc_keys_.list)
@@ -46,7 +44,6 @@ ConfUpdater &ConfUpdater::update_conf(const po::variables_map &vm,
                                       const google::protobuf::RepeatedPtrField<Address> &addr_list,
                                       const std::string &priv_key, const std::string &dns)
 {
-    boost::lock_guard<boost::interprocess::file_lock> lock(fl_);
     auto conf_fstrm = boost::filesystem::ofstream(conf_pth_, std::ios_base::app);
     conf_fstrm << "[Interface]" << '\n';
     for (auto p : intrfc_keys_.list)

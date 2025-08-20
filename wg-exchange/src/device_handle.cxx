@@ -1,5 +1,5 @@
-#include <unistd.h>
 #include <iostream>
+#include <unistd.h>
 #include <vector>
 
 #include "ext_hacl_star/Hacl_Curve25519_51.h"
@@ -40,10 +40,9 @@ inline std::string signature(Enabled)
 }
 } // namespace Dbus
 
-#include <boost/chrono/time_point.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/operations.hpp>
-#include <boost/thread.hpp>
+#include <thread>
 
 #include "device_handle.h"
 
@@ -145,12 +144,12 @@ class DeviceHandler::SystemdManager : public ObjectProxy
 // I'll rework this soon, such that the restart_service is run only once maybe
 void DeviceHandler::run_worker()
 {
-    boost::chrono::seconds process_time(30);
-    boost::chrono::steady_clock::time_point start{boost::chrono::steady_clock::now()};
+    std::chrono::seconds process_time(30);
+    std::chrono::steady_clock::time_point start{std::chrono::steady_clock::now()};
     int counter = 0;
     while (running_.load(std::memory_order_relaxed))
     {
-        if (start + process_time < boost::chrono::steady_clock::now() && counter > 0)
+        if (start + process_time < std::chrono::steady_clock::now() && counter > 0)
         {
             restart_service();
             counter = 0;
@@ -172,7 +171,7 @@ void DeviceHandler::start_worker()
 {
     std::cerr << "starting DeviceHandler..." << '\n';
     running_.store(true, std::memory_order_relaxed);
-    t_ = boost::thread(&DeviceHandler::run_worker, this);
+    t_ = std::thread(&DeviceHandler::run_worker, this);
 }
 
 void DeviceHandler::stop_worker()
@@ -225,11 +224,6 @@ bool DeviceHandler::process_request()
     return success;
 }
 
-DeviceHandler &DeviceHandler::operator<<(PeerRequest &peer_req)
-{
-
-}
-
 void DeviceHandler::restart_service()
 {
     try
@@ -245,7 +239,7 @@ void DeviceHandler::restart_service()
     }
 }
 
-bool DeviceHandler::setup(po::variables_map& vmap)
+bool DeviceHandler::setup(po::variables_map &vmap)
 {
     if (!is_setup_)
     {
@@ -254,7 +248,8 @@ bool DeviceHandler::setup(po::variables_map& vmap)
         uint8_t key[WG_KEY_LEN], pub_key[WG_KEY_LEN];
         char base64_pub[WG_KEY_LEN_BASE64], base64_key[WG_KEY_LEN_BASE64];
 
-        if(!generate_random_key(key)) {
+        if (!generate_random_key(key))
+        {
             throw std::runtime_error("key generation failed");
         }
         Hacl_Curve25519_51_secret_to_public(pub_key, key);
@@ -262,10 +257,9 @@ bool DeviceHandler::setup(po::variables_map& vmap)
         key_to_base64(base64_key, key);
         key_to_base64(base64_pub, pub_key);
 
-        std::string b64_device_key {base64_key, WG_KEY_LEN_BASE64};
+        std::string b64_device_key{base64_key, WG_KEY_LEN_BASE64};
         conf_updater_->update_conf(vmap, b64_device_key);
         b64_device_pub_ = std::string(base64_pub, WG_KEY_LEN_BASE64);
-
 
         dispatch_ = DBus::StandaloneDispatcher::create();
         conn_ = dispatch_->create_connection(DBus::BusType::SYSTEM);
@@ -287,10 +281,10 @@ bool DeviceHandler::setup(po::variables_map& vmap)
 
             std::cerr << enabled.changes[0].type << ", name: " << enabled.changes[0].file_nm
                       << ", destination: " << enabled.changes[0].dest << '\n';
-            boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
             obj_->daemon_reload();
-            boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
             obj_->get_unit(service_nm_);
             is_setup_ = true;

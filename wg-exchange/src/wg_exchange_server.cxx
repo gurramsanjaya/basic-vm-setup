@@ -4,6 +4,7 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
+#include <thread>
 
 #include "device_handle.h"
 #include "wg_exchange.h"
@@ -95,8 +96,8 @@ class GrpcHandler
         if (srvr_)
         {
             // TODO: Move this jury rigged timer into a separate method
-            boost::thread t([this, timeout]() {
-                boost::this_thread::sleep_for(boost::chrono::minutes(timeout));
+            std::thread t([this, timeout]() {
+                std::this_thread::sleep_for(std::chrono::minutes(timeout));
                 if (this->srvr_)
                 {
                     this->srvr_->Shutdown();
@@ -144,8 +145,6 @@ int main(int argc, char **argv)
         ("conf", po::value<std::string>()->default_value("./wge_server.conf"), "conf file")
         ("help", "produce help message");
     // clang-format on
-
-    cmd_line_desc.add(conf_desc);
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, cmd_line_desc), vm);
