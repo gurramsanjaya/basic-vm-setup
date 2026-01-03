@@ -7,6 +7,8 @@
 *.tfstate.*
 *.tfvars
 
+wg_clients
+
 vm/outplan
 
 vars/*.pem

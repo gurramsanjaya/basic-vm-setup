@@ -1,0 +1,11 @@
+## template:jinja
+#!/usr/sbin/nft -f
+
+define if_eth = {{ default_interface }}
+define wge_temp_port = 59995
+
+table inet Main {
+  chain input_temp {
+    iif $if_eth tcp dport $wge_temp_port accept
+  }
+}

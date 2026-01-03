@@ -1,0 +1,3 @@
+[Client]
+InterfaceNames = ["pc", "android", "random"]
+KeepAlive = 25

@@ -1,10 +1,11 @@
+## template:jinja
 #!/usr/sbin/nft -t
 
 table inet wg_extension
 delete table inet wg_extension
 
 define ifnm_wg = "wgs0"
-define if_eth = ${DEFAULT_INTERFACE}
+define if_eth = {{ default_interface }}
 define wg_port = 59912
 define ip4_wg = 192.168.10.1
 define ip6_wg = fd00:1::1
@@ -52,8 +53,8 @@ table inet wg_extension {
 }
 
 table inet Main {
-    chain input_filter_extra {
-        iif $if_eth udp dport $wg_port accept 
-    }
+  chain input_filter_extra {
+    iif $if_eth udp dport $wg_port accept
+  }
 }
 

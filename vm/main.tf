@@ -10,7 +10,7 @@ data "digitalocean_regions" "doreg" {
   }
   filter {
     key = "sizes"
-    values = ["s-1vcpu-512mb-10gb"]
+    values = [var.vm-size]
   }
 }
 
@@ -22,19 +22,20 @@ data "cloudinit_config" "c_config" {
   gzip = false
   part {
     content_type = "text/cloud-config"
-    content = fileexists(var.cloud_config_base_template) ? templatefile(var.cloud_config_base_template, { ssh_key : file(var.ssh_public_key_file) }) : null
+    content = fileexists(var.cloud_config_base_template) ? templatefile(var.cloud_config_base_template, { ssh_key : file(var.ssh_public_key_file) }) : ""
     filename = "cloud_config_base"
   }
   dynamic part {
     for_each = var.cloud_config_extra
     content {
       content_type = part.value["content_type"]
-      content = fileexists(part.value["file"]) ? file(part.value["file"]) : null
-      filename = part.key
+      content = fileexists(part.value["content_file"]) ? file(part.value["content_file"]) : ""
+      filename = part.value["filename"]
     }
   }
 }
 
+# skip if using cloud init.
 resource "digitalocean_ssh_key" "ssh_key" {
   count = var.use_cloudinit ? 0 : 1
   name = "ssh-${var.name_suffix}"
@@ -50,8 +51,8 @@ resource "random_integer" "random" {
 resource "digitalocean_droplet" "web" {
   image = "ubuntu-22-04-x64"
   name = "vm-${var.name_suffix}"
-  region = data.digitalocean_regions.doreg.regions[random_integer.random.result].slug
-  size = "s-1vcpu-512mb-10gb"
+  region = coalesce(var.vm-region-override, data.digitalocean_regions.doreg.regions[random_integer.random.result].slug)
+  size = var.vm-size
   ipv6 = true
   ssh_keys = digitalocean_ssh_key.ssh_key[*].id
   resize_disk = false

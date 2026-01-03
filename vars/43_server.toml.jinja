@@ -1,0 +1,17 @@
+## template:jinja
+[Server]
+Ttl = 500
+WireguardEndpoint = "{{ external_ip }}:59912"
+WireguardDns = ["fd00:10::1","192.168.10.1"]
+InterfaceName = "wgs0"
+
+[Interface]
+Address = ["192.168.10.1/24", "fd00:10::1/120"]
+FwMark = 0x0000ca6c
+PreUp = [
+  "nft -f /etc/wireguard/wg_nat.conf",
+  "sysctl -w net.ipv4.conf.all.rp_filter=1 net.ipv4.conf.{{ default_interface }}.forwarding=1 net.ipv6.conf.all.forwarding=1"
+]
+PostUp = ["sysctl -w net.ipv4.conf.%i.forwarding=1"]
+PreDown = ["sysctl -w net.ipv4.conf.{{ default_interface }}.forwarding=0 net.ipv6.conf.all.forwarding=0"]
+PostDown = ["nft -f /etc/wireguard/wg_delete.conf"]

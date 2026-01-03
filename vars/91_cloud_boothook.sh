@@ -2,6 +2,9 @@
 
 umask 022
 DNSCRPT_VER=2.1.8
+WGE_VER=1.0.8
+
+mkdir -p /etc/profile.d/
 
 function get_arch() {
   case "$(uname -m)" in
@@ -30,7 +33,7 @@ function download_and_setup_dnscrypt() {
   mkdir -p /opt/dnscrypt-proxy/
   pushd /opt/dnscrypt-proxy/
 
-  TAR_FILE="dnscrypt-proxy-linux_${ARCH}-${DNSCRPT_VER}.tar.gz"
+  local TAR_FILE="dnscrypt-proxy-linux_${ARCH}-${DNSCRPT_VER}.tar.gz"
   curl -sSLO "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/${DNSCRPT_VER}/${TAR_FILE}"
   tar -xvf "$TAR_FILE"
 
@@ -46,18 +49,38 @@ EOF
   popd
 }
 
-# get default network device and set it to /etc/profile.d/ so its available for all users later
-export DEFAULT_INTERFACE=$(ip route get 9.9.9.9 | awk '{print $5}')
+function download_and_setup_wg_exchange() {
+  case $(uname -m) in
+    x86_64|amd64)
+      ARCH=amd64
+      ;;
+    arm64)
+      ARCH=arm64
+      ;;
+    *)
+      echo "invalid arch for wg-exchange"
+      exit 1
+      ;;
+  esac
 
-mkdir -p /etc/profile.d/
-cat >> /etc/profile.d/user_vars.sh << EOF
-export DEFAULT_INTERFACE=${DEFAULT_INTERFACE}
+  local WGE_HOME="/opt/wg-exchange"
+
+  mkdir -p $WGE_HOME
+  pushd $WGE_HOME
+
+  local TAR_FILE="wg-exchange-linux-${ARCH}-${WGE_VER}.tar.zst"
+  curl -sSLO "https://github.com/gurramsanjaya/wg-exchange/releases/download/v${WGE_VER}/${TAR_FILE}"
+  tar -xvf "$TAR_FILE"
+
+  cat >> /etc/profile.d/user_vars.sh << EOF
+  export WGE_HOME="${WGE_HOME}"
 EOF
 
-# Setup firewall, toggle the nftables service later
-# This won't work for redhat variants. For redhat, place this in /etc/sysconfig/nftables.conf or /etc/nftables/main.nft
-curl -sSfL https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/refs/heads/main/vars/nftables.conf | envsubst '$DEFAULT_INTERFACE' > /etc/nftables.conf
-nft -f /etc/nftables.conf
+  ln -rs "wge-server" /usr/bin/
+  popd
+}
 
 # Basic dnscrpt-proxy setup. Change the toml/service later
 download_and_setup_dnscrypt
+
+download_and_setup_wg_exchange

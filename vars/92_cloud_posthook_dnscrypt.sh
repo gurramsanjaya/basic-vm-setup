@@ -32,12 +32,20 @@ function modify_dnscrypt_config() {
   # Block NSFW domains
   curl -sSfL https://raw.githubusercontent.com/hagezi/dns-blocklists/refs/heads/main/wildcard/nsfw.txt >> blocked-names.txt
 
+  # Block Malware
+  curl -sSfL https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif.txt >> blocked-names.txt
+
+  # Block Adds
+  curl -sSfL https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/popupads.txt >> blocked-names.txt
+
   cat >> blocked-names.txt << EOF
 ## Add whatever other blocked domains you require here
 EOF
   popd
 }
 
+# machine-id is improperly renewed
+systemctl restart systemd-journald
 systemctl enable --now nftables.service
 
 modify_dnscrypt_config
