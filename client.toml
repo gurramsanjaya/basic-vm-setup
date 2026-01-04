@@ -1,7 +1,7 @@
 [Client]
 WgClients = [
-  { Name = "pc" }
-  { Name = "android", GenerateQR = true }
+  { Name = "pc" },
+  { Name = "android", GenerateQR = true },
   { Name = "random" }
 ]
 KeepAlive = 25

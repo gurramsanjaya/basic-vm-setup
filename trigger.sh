@@ -6,7 +6,10 @@ set -e
 : ${CLIENT_DIR=wg_clients}
 : ${TERRAFORM_CLIENT:=tofu}
 : ${SKIP_CREATE:=true}
+: ${SKIP_HOSTS_MOD:=false}
 : ${SKIP_WGE_CLIENT:=false}
+: ${PRE_SLEEP_WGE_CLIENT:=150}
+# set DN_OVERRIDE to override the DN value that will by default pull from openssl.cnf
 
 
 # this tries matching '[server_extensions]' and then looks for the first 'subjectAltName = DNS:<domain>' along the next lines
@@ -39,30 +42,40 @@ echo -e "\n=======Basic Checks=======\n"
 wge-client -version
 jq --version
 "$TERRAFORM_CLIENT" -version
+if ! [[ $PRE_SLEEP_WGE_CLIENT =~ ^[0-9]+[smhd]?$ ]]; then
+  echo -e "\ninvalid sleep time..."
+  exit 1
+fi
 
 mkdir -p "$CLIENT_DIR"
 
-pushd vm
+pushd vm 1>/dev/null
 if [[ $SKIP_CREATE != "true" ]]; then
   echo -e "\n=======Instance Create=====\n"
   "$TERRAFORM_CLIENT" plan -out ${PLAN}
   "$TERRAFORM_CLIENT" apply ${PLAN}
 fi
 
-if [[ $SKIP_WGE_CLIENT != "true" ]]; then
-echo -e "\n======/etc/hosts Update====\n"
+
+if [[ $SKIP_WGE_CLIENT == "true" ]]; then
+  popd 1>/dev/null
+else
+  echo -e "\n======/etc/hosts Update====\n"
   INSTANCE_IP=$("$TERRAFORM_CLIENT" output -json | jq -r .ipv4_address.value)
   echo "using ip retrieved from state: ${INSTANCE_IP}"
-  popd
+  popd 1>/dev/null
 
-  ## careful here, we are messing around with the /etc/hosts
-  echo "replacing domain for ${INSTANCE_IP} if any and saving it with ${DN}"
-  sudo -s -- <<EOF
+  if [[ $SKIP_HOSTS_MOD != "true" ]]; then
+    ## careful here, we are messing around with the /etc/hosts
+    echo "replacing domain for ${INSTANCE_IP} if any and saving it with ${DN} and replacing ip for ${DN} if any and replacing it with ${INSTANCE_IP}"
+    sudo -s -- <<EOF
 cp /etc/hosts /etc/hosts_old
 sed -i '/.*${INSTANCE_IP}.*/d' /etc/hosts
+sed -i '/.*${DN}.*/d' /etc/hosts
 sed -i '$ {/^$/d}' /etc/hosts
 printf '\n%s\t%s' $INSTANCE_IP "$DN" >> /etc/hosts
 EOF
+  fi
 
   echo -e "\n===Nslookup Verification===\n"
   nslookup "$DN"
@@ -70,11 +83,12 @@ EOF
 
   echo -e "\n======Starting client======\n"
   CWD=$(pwd)
-  pushd "$CLIENT_DIR"
+  pushd "$CLIENT_DIR" 1>/dev/null
   if [[ $SKIP_CREATE != "true" ]]; then
-    # sleep for atleast 1 minute, cloud init takes time
-    sleep 70
+    # sleep for atleast 2 1/2 minutes, cloud init takes time...
+    echo "sleeping for ${PRE_SLEEP_WGE_CLIENT}, please wait..."
+    sleep $PRE_SLEEP_WGE_CLIENT
   fi
   wge-client -key "${CWD}/tls/client.key" -cert "${CWD}/tls/client.pem" -conf "${CWD}/client.toml" -endpoint "https://${DN}:${PORT}"
-  popd
+  popd 1>/dev/null
 fi
