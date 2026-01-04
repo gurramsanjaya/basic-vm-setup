@@ -69,6 +69,13 @@ ssh-key: ${SSH_PRIV} ${SSH_PUB}
 clean-ssh-key:
 	rm -f ${SSH_PRIV} ${SSH_PUB}
 
+.PHONY: all clean
+
+all: ssh-key all-tls
+
+clean: clean-tls clean-ssh-key
+
+
 
 
 

@@ -76,7 +76,7 @@ def handle_part(data: any, ctype: str, filename: str, payload: str, frequency: a
         if not render_vars[DEF_INTERFACE]:
             raise RuntimeError("invalid device match")
 
-        out, _ = subp.subp(["curl", "-4", "--interface", render_vars[DEF_INTERFACE], "icanhazip.com"], rcs=[0])
+        out, _ = subp.subp(["curl", "-4", "--interface", render_vars[DEF_INTERFACE], "https://icanhazip.com"], rcs=[0])
         assert isinstance(out, str)
         ip = ipaddress.ip_address(out.strip())
         render_vars[EXTERNAL_IP] = ip.compressed

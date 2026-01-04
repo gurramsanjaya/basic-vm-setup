@@ -39,7 +39,7 @@ function modify_dnscrypt_config() {
   # curl -sSfL https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/popupads.txt >> blocked-names.txt
 
   # Using aggregated list
-  curl -sSfL https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/main/dnsblocklist/aggregated_blocklist >> blocked-name.txt
+  curl -sSfL https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/main/dnsblocklist/aggregated_blocklist >> blocked-names.txt
 
 #   cat >> blocked-names.txt << EOF
 # ## Add whatever other blocked domains you require here

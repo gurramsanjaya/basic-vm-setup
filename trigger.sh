@@ -5,7 +5,7 @@ set -e
 : ${PLAN:=outplan}
 : ${CLIENT_DIR=wg_clients}
 : ${TERRAFORM_CLIENT:=tofu}
-: ${SKIP_CREATE:=true}
+: ${SKIP_CREATE:=false}
 : ${SKIP_HOSTS_MOD:=false}
 : ${SKIP_WGE_CLIENT:=false}
 : ${PRE_SLEEP_WGE_CLIENT:=150}
