@@ -1,3 +1,7 @@
 [Client]
-InterfaceNames = ["pc", "android", "random"]
+WgClients = [
+  { Name = "pc" }
+  { Name = "android", GenerateQR = true }
+  { Name = "random" }
+]
 KeepAlive = 25
