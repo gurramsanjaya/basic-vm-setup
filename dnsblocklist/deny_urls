@@ -1,0 +1,12 @@
+# Block DoH queries specified by client, force client to use dnscrypt DNS.
+https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/refs/heads/master/doh-domains.txt
+
+
+# Block NSFW domains
+https://raw.githubusercontent.com/hagezi/dns-blocklists/refs/heads/main/wildcard/nsfw.txt
+
+# Block Malware
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif.txt
+
+# Block Adds
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/popupads.txt
