@@ -110,7 +110,7 @@ EOF
   nslookup "$DN"
   read -p "press enter to continue..."
 
-  hrule "Starting WG client"
+  hrule "Starting WG Exchange client"
   CWD=$(pwd)
   pushd "$CLIENT_DIR" 1>/dev/null
   if [[ $SKIP_CREATE != "true" ]]; then
