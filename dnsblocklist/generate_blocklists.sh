@@ -62,4 +62,4 @@ sed -i '/^[[:space:]]*#/d' "$RESULTS_TEMP"
 
 ## finally sort it
 echo "Sorting the file..."
-sort "$RESULTS_TEMP" > "$RESULTS_FILE"
+sort -u "$RESULTS_TEMP" > "$RESULTS_FILE"

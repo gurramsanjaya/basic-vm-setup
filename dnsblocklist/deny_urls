@@ -3,10 +3,13 @@ https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/refs/heads/master/doh
 
 
 # Block NSFW domains
-https://raw.githubusercontent.com/hagezi/dns-blocklists/refs/heads/main/wildcard/nsfw.txt
+https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/nsfw-onlydomains.txt
 
 # Block Malware
-https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif.txt
+https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/tif-onlydomains.txt
 
-# Block Adds
-https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/popupads.txt
+# Block Piracy
+https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/anti.piracy-onlydomains.txt
+
+# Block Ads
+https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/popupads-onlydomains.txt
