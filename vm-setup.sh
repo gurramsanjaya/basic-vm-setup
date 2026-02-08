@@ -6,6 +6,7 @@ set -eo pipefail
 : ${CLIENT_DIR=wg_clients}
 : ${TERRAFORM_CLIENT:=tofu}
 : ${SKIP_CREATE:=false}
+: ${SKIP_CREATE_WORKSAPCE:=false}
 : ${SKIP_HOSTS_MOD:=false}
 : ${SKIP_WGE_CLIENT:=false}
 : ${PRE_SLEEP_WGE_CLIENT:=150}
@@ -74,6 +75,13 @@ mkdir -p "$CLIENT_DIR"
 
 pushd vm 1>/dev/null
 if [[ $SKIP_CREATE != "true" ]]; then
+  if [[ $SKIP_CREATE_WORKSAPCE != "true" ]]; then
+    hrule "Workspace Create"
+    read -p "Name of new Workspace: " NEW_WRKSP
+    CUR_WRKSP=$("$TERRAFORM_CLIENT" workspace show) ## should we delete this?
+    "$TERRAFORM_CLIENT" workspace new "$NEW_WRKSP"
+  fi
+
   hrule "Instance Create"
   "$TERRAFORM_CLIENT" plan -out ${PLAN}
   "$TERRAFORM_CLIENT" apply ${PLAN}
