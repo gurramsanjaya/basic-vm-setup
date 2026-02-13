@@ -75,7 +75,7 @@ mkdir -p "$CLIENT_DIR"
 
 pushd vm 1>/dev/null
 if [[ $SKIP_CREATE != "true" ]]; then
-  if [[ $SKIP_CREATE_WORKSAPCE != "true" ]]; then
+  if [[ $SKIP_CREATE_WORKSPACE != "true" ]]; then
     hrule "Workspace Create"
     read -p "Name of new Workspace: " NEW_WRKSP
     CUR_WRKSP=$("$TERRAFORM_CLIENT" workspace show) ## should we delete this?
