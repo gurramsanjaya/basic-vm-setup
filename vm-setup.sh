@@ -32,6 +32,21 @@ function hrule() {
   fi
 }
 
+# $1 - CA cert, $2 - cert
+function check_cert() {
+  echo -e "\nChecking cert - $2, with CA - $1:"
+  openssl verify -CAfile "$1" "$2" &&
+  openssl x509 -checkend 1000 -in "$2"
+}
+
+function check_continue() {
+  read -p "Continue (y/n)? " CONTINUE
+  if ! [[ $CONTINUE =~ ^[[:space:]]*[yY] ]]; then
+    echo "quiting..."
+    exit 0
+  fi
+}
+
 
 # this tries matching '[server_extensions]' and then looks for the first 'subjectAltName = DNS:<domain>' along the next lines
 AWK_PRG='
@@ -63,6 +78,7 @@ echo "using domain name: ${DN}"
 
 # basic checks
 hrule "Basic Checks"
+openssl --version
 wge-client -version
 jq --version
 "$TERRAFORM_CLIENT" -version
@@ -70,6 +86,22 @@ if ! [[ $PRE_SLEEP_WGE_CLIENT =~ ^[0-9]+[smhd]?$ ]]; then
   echo -e "\ninvalid sleep time..."
   exit 1
 fi
+
+# check certs first, disable fail on non-zero return status
+hrule "Check Certs"
+set +e
+if ! (check_cert "tls/rootCA.pem" "tls/42_server.pem" && check_cert "tls/rootCA.pem" "tls/client.pem"); then
+  echo -e "\ngenerate new cert chain"
+  check_continue
+  make clean-tls all-tls
+  # check again
+  if ! (check_cert "tls/rootCA.pem" "tls/42_server.pem" && check_cert "tls/rootCA.pem" "tls/client.pem"); then
+    echo "\nsomething is wrong with cert generation... quiting..."
+    exit 1
+  fi
+fi
+
+set -e
 
 mkdir -p "$CLIENT_DIR"
 
@@ -99,11 +131,7 @@ else
 
     ## careful here, we are messing around with the /etc/hosts
     echo "removing domain for ${INSTANCE_IP} if any, removing ip for ${DN} if any, creating a new 1-1 entry with ${INSTANCE_IP} - ${DN}"
-    read -p "Continue (y/n)? " CONTINUE
-    if ! [[ $CONTINUE =~ ^[[:space:]]*[yY] ]]; then
-      echo "quiting..."
-      exit 1
-    fi
+    check_continue
 
     sudo -s -- <<EOF
 cp /etc/hosts /etc/hosts_old
