@@ -13,3 +13,7 @@ https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/anti.piracy-on
 
 # Block Ads
 https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/popupads-onlydomains.txt
+
+
+# Block AI
+https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/refs/heads/main/dnsblocklist/ai_sites
