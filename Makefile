@@ -50,6 +50,7 @@ root-tls: ${ROOT_TLS_OUTPUTS}
 all-tls: client-tls server-tls
 
 clean-tls:
+	shred ${ROOT_TLS_OUTPUTS} ${SERVER_TLS_OUTPUTS} ${CLIENT_TLS_OUTPUTS}
 	rm -f ${ROOT_TLS_OUTPUTS} ${SERVER_TLS_OUTPUTS} ${CLIENT_TLS_OUTPUTS}
 
 
@@ -67,6 +68,7 @@ ${SSH_PRIV} ${SSH_PUB}:
 ssh-key: ${SSH_PRIV} ${SSH_PUB}
 
 clean-ssh-key:
+	shred ${SSH_PRIV} ${SSH_PUB}
 	rm -f ${SSH_PRIV} ${SSH_PUB}
 
 .PHONY: all clean
