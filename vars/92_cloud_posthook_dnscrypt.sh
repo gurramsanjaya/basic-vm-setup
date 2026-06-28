@@ -26,7 +26,7 @@ function modify_dnscrypt_config() {
   sed -i -E 's/^# (blocked_names_f.*)$/\1/' dnscrypt-proxy.toml
 
   # Using aggregated list
-  curl -sSfL https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/main/dnsblocklist/aggregated_blocklist >> blocked-names.txt
+  curl -sSfL https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/main/dnsblocklist/blocked_names >> blocked-names.txt
 
 #   cat >> blocked-names.txt << EOF
 # ## Add whatever other blocked domains you require here
