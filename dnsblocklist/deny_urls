@@ -16,7 +16,7 @@ https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/popupads-onlyd
 
 
 # Block AI
-https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/refs/heads/main/dnscrypt/ai_sites
+https://raw.githubusercontent.com/gurramsanjaya/basic-vm-setup/refs/heads/main/dnsblocklist/ai_sites
 
 # Block Reflect4 proxies
 https://raw.githubusercontent.com/clsfo/reflect4-blocklist/refs/heads/main/reflect4_domains.txt
