@@ -2,7 +2,7 @@
 
 umask 022
 DNSCRPT_VER=2.1.8
-WGE_VER=1.0.11
+WGE_VER=1.0.12
 
 mkdir -p /etc/profile.d/
 
