@@ -23,6 +23,8 @@ DEF_IP_TO_CHECK = "9.9.9.9"
 NFT_TYPE = "text/x-custom-nft"
 WGE_TYPE = "text/x-custom-wge"
 WG_TYPE = "text/x-custom-wg"
+BLOCKLIST_TYPE = "text/x-custom-blocklist"
+CRONTAB_TYPE = "text/x-custom-crontab"
 
 # param
 RENDER_PARAM = "render"
@@ -31,13 +33,16 @@ RENDER_PARAM = "render"
 CONTENT_TYPE_PATH_MAP = {
     NFT_TYPE: "/etc/",
     WGE_TYPE: "/etc/wge/",
-    WG_TYPE: "/etc/wireguard/"
+    WG_TYPE: "/etc/wireguard/",
+    BLOCKLIST_TYPE: "/etc/blocklist/",
+    CRONTAB_TYPE: "/etc/crontab/"
 }
 
 NFTABLE = "nftables.conf"
 nftable_count = 0
 
 DEF_MODE = 0o640
+SCRIPT_MODE = 0o750
 
 def list_types():
     return list(CONTENT_TYPE_PATH_MAP.keys())
@@ -94,14 +99,21 @@ def handle_part(data: any, ctype: str, filename: str, payload: str, frequency: a
 
     if ctype in CONTENT_TYPE_PATH_MAP:
         LOG.info(f"for filename: {filename}, content_type: {ctype} detected, handling...")
+        file_written = False
         if ctype == NFT_TYPE:
             global nftable_count
             if filename == NFTABLE and nftable_count == 0:
                 nftable_count += 1
                 nft_conf = write_part(CONTENT_TYPE_PATH_MAP[ctype], NFTABLE, payload, DEF_MODE)
+                file_written = True
                 subp.subp(["nft", "-f", nft_conf], rcs=[0])
             else:
                 raise ValueError(f"failure to set nftables.conf, filename: {filename}, count: {nftable_count}")
-        else:
+        if ctype == BLOCKLIST_TYPE:
+            if filename.endswith(".sh"):
+                write_part(CONTENT_TYPE_PATH_MAP[ctype], filename, payload, SCRIPT_MODE)
+                file_written = True
+
+        if not file_written:
             write_part(CONTENT_TYPE_PATH_MAP[ctype], filename, payload, DEF_MODE)
     return

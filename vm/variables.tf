@@ -7,13 +7,13 @@ variable "name_suffix" {
 }
 variable "ssh_public_key_file" {
   nullable = false
-  default = "../vars/ssh_key.pem.pub"
+  default = "../cloudinit/ssh_key.pem.pub"
 }
 variable "use_cloudinit" {
   type = bool
 }
 variable "cloud_config_base_template" {
-  default = "../vars/0_cloud_config.tftpl"
+  default = "../cloudinit/0_cloud_config.tftpl"
 }
 
 # using list here to maintain the order
@@ -24,66 +24,98 @@ variable "cloud_config_extra" {
     content_file = string
   }))
   default = [
+    # need for rendering and placing custom files
     {
       filename = "setuphandler.py"
       content_type = "text/part-handler"
-      content_file = "../parthandler/1_setuphandler.py"
+      content_file = "../cloudinit/parthandler/1_setuphandler.py"
     },
+    # the main nftable for the vm
     {
       filename = "nftables.conf"
       content_type = "text/x-custom-nft"
-      content_file = "../vars/2_nftables.conf.jinja"
+      content_file = "../cloudinit/2_nftables.conf.jinja"
     },
+    # wireguard config
     {
       filename = "wg_nat.conf"
       content_type = "text/x-custom-wg"
-      content_file = "../vars/31_wg_nat.conf.jinja"
+      content_file = "../cloudinit/31_wg_nat.conf.jinja"
     },
     {
       filename = "wg_delete.conf"
       content_type = "text/x-custom-wg"
-      content_file = "../vars/32_wg_delete.conf"
+      content_file = "../cloudinit/32_wg_delete.conf"
     },
+    # wireguard exchange config
     {
       filename = "server.key"
       content_type = "text/x-custom-wge"
-      content_file = "../tls/41_server.key"
+      content_file = "../cloudinit/tls/41_server.key"
     },
     {
       filename = "server.pem"
       content_type = "text/x-custom-wge"
-      content_file = "../tls/42_server.pem"
+      content_file = "../cloudinit/tls/42_server.pem"
     },
     {
       filename = "server.toml"
       content_type = "text/x-custom-wge"
-      content_file = "../vars/43_server.toml.jinja"
+      content_file = "../cloudinit/43_server.toml.jinja"
     },
     {
       filename = "wge_nft_allow.conf"
       content_type = "text/x-custom-wge"
-      content_file = "../vars/44_wge_nft_allow.conf.jinja"
+      content_file = "../cloudinit/44_wge_nft_allow.conf.jinja"
     },
     {
       filename = "wge_nft_delete.conf"
       content_type = "text/x-custom-wge"
-      content_file = "../vars/45_wge_nft_delete.conf"
+      content_file = "../cloudinit/45_wge_nft_delete.conf"
+    },
+    # blocklist config
+    {
+      filename = "deny_urls"
+      content_type = "text/x-custom-blocklist"
+      content_file = "../cloudinit/blocklist/51_deny_urls"
     },
     {
-      filename = "cloud_boothook.sh"
+      filename = "deny_extras"
+      content_type = "text/x-custom-blocklist"
+      content_file = "../cloudinit/blocklist/52_deny_extras"
+    },
+    {
+      filename = "force_allow"
+      content_type = "text/x-custom-wge"
+      content_file = "../cloudinit/blocklist/53_force_allow"
+    },
+    {
+      filename = "refresh_blocklist.sh"
+      content_type = "text/x-custom-blocklist"
+      content_file = "../cloudinit/blocklist/54_refresh_blocklist.sh"
+    },
+    # boothook, to be run just after the network setup phase (keep filename in ascending order of execution)
+    {
+      filename = "91-boothook.sh"
       content_type = "text/cloud-boothook"
-      content_file = "../vars/91_cloud_boothook.sh"
+      content_file = "../cloudinit/91_cloud_boothook_setup.sh"
+    },
+    # posthooks, to be run after all the cloudinit module configs (skip file name so that they are run in order)
+    {
+      filename = "92-posthook.sh"
+      content_type = "text/x-shellscript"
+      content_file = "../cloudinit/92_cloud_posthook_dnscrypt.sh"
     },
     {
-      filename = "cloud_posthook_dnscrypt.sh"
+      filename = "93-posthook.sh"
       content_type = "text/x-shellscript"
-      content_file = "../vars/92_cloud_posthook_dnscrypt.sh"
+      content_file = "../cloudinit/93_cloud_posthook_wge.sh"
     },
     {
-      filename = "cloud_posthook_wge.sh"
-      content_type = "text/x-shellscript"
-      content_file = "../vars/93_cloud_posthook_wge.sh"
-    }
+      filename = "94-posthook.sh"
+      content_type = "text/cloud-boothook"
+      content_file = "../cloudinit/91_cloud_posthook_machineid_issue_fix.sh"
+    },
   ]
   nullable = true
   description = "list of cloudinit files that will be archived together in multipart mime format and sent"

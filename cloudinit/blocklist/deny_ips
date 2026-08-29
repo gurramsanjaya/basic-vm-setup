@@ -1,0 +1,4 @@
+## TODO: add ebpf ip blocking mechanism to make use of this file
+## for now, this file is currently not in use.
+# Block proxy ips
+https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/all/data.txt

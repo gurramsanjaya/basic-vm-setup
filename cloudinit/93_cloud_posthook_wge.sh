@@ -1,9 +1,13 @@
 #!/bin/bash
 
-USER_VAR_FILE="./etc/profile.d/user_vars.sh"
-if [ -f "$USER_VAR_FILE" ]; then
-  . "$USER_VAR_FILE"
+# The main cloud-init process is using initial set of env variables and those are being passed to
+# this posthook child process. The env variables set in cloud-boothook.sh need to be manually sourced
+USER_VARS_FILE="/etc/profile.d/user_vars.sh"
+if [ -f "$USER_VARS_FILE" ]; then
+  . "$USER_VARS_FILE"
 fi
+
+set -x
 
 WGE_ETC_DIR="/etc/wge"
 WGE_NFT_ALLOW="${WGE_ETC_DIR}/wge_nft_allow.conf"
@@ -17,7 +21,7 @@ function modify_dnscrypt_config() {
   pushd "$DNSCRYPT_HOME"
   sed -i -E "s/^(listen_addresses = \[)(.*)\$/\\1'192.168.10.1:53', \\2/" dnscrypt-proxy.toml
   sed -i -E "s/^(listen_addresses = \[)(.*)\$/\\1'\[fd00:10::1\]:53', \\2/" dnscrypt-proxy.toml
-  dnscrypt-proxy -service restart
+  systemctl restart dnscrypt-proxy
   popd
 }
 

@@ -4,7 +4,7 @@ ROOT_SUBJ ?= "/C=JP/O=Stardust Crusaders/CN=Root CA"
 CLIENT_SUBJ ?= "/C=JP/O=Diamond Is Unbreakable/CN=WG-Client"
 SERVER_SUBJ ?= "/C=JP/O=Steel Ball Run/CN=WG-Server"
 
-TLS_PATH ?= tls
+TLS_PATH ?= cloudinit/tls
 ROOT_TLS_SUFFIX ?= rootCA
 
 SERVER_KEY_FILE = 41_server.key
@@ -56,8 +56,8 @@ clean-tls:
 
 ## ssh-key stuff
 SSH_KEY_PREFIX ?= ssh_key
-SSH_PRIV := vars/${SSH_KEY_PREFIX}.pem
-SSH_PUB := vars/${SSH_KEY_PREFIX}.pem.pub
+SSH_PRIV := cloudinit/${SSH_KEY_PREFIX}.pem
+SSH_PUB := cloudinit/${SSH_KEY_PREFIX}.pem.pub
 SSH_KEY_OUTPUTS :=  ${SSH_PRIV} ${SSH_PUB}
 
 .PHONY: ssh-key clean-ssh-key

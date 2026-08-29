@@ -1,17 +1,3 @@
 .token
 .vscode
-
-**/.terraform/*
-.terraform.lock.hcl
-*.tfstate
-*.tfstate.*
-*.tfvars
-
-wg_clients
-
-vm/outplan
-
-vars/*.pem
-vars/*.pem.pub
-
 images/

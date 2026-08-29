@@ -3,10 +3,11 @@ set -eo pipefail
 
 : ${PORT:=59995}
 : ${PLAN:=outplan}
-: ${CLIENT_DIR=wg_clients}
+: ${TLS_DIR:=cloudinit/tls}
+: ${CLIENT_DIR:=wg_clients}
 : ${TERRAFORM_CLIENT:=tofu}
 : ${SKIP_CREATE:=false}
-: ${SKIP_CREATE_WORKSAPCE:=false}
+: ${SKIP_CREATE_WORKSPACE:=false}
 : ${SKIP_HOSTS_MOD:=false}
 : ${SKIP_WGE_CLIENT:=false}
 : ${PRE_SLEEP_WGE_CLIENT:=150}
@@ -32,21 +33,32 @@ function hrule() {
   fi
 }
 
-# $1 - CA cert, $2 - cert
+# $1 - TLS_DIR, $2 - CA cert, $3 - cert
 function check_cert() {
-  echo -e "\nChecking cert - $2, with CA - $1:"
-  openssl verify -CAfile "$1" "$2" &&
-  openssl x509 -checkend 1000 -in "$2"
+  echo -e "\nChecking cert - $2, with CA - $3:"
+  local cacert=$(readlink -e "$1/$2")
+  local cert=$(readlink -e "$1/$3")
+  openssl verify -CAfile "$cacert" "$cert" &&
+  openssl x509 -checkend 1000 -in "$cert"
 }
 
 function check_continue() {
-  read -p "Continue (y/n)? " CONTINUE
-  if ! [[ $CONTINUE =~ ^[[:space:]]*[yY] ]]; then
+  local continue
+  read -p "Continue (y/n)? " continue
+  if ! [[ $continue =~ ^[[:space:]]*[yY] ]]; then
     echo "quiting..."
     exit 0
   fi
 }
 
+function check_path() {
+  local path
+  if ! path=$(readlink -e "$1"); then
+    echo "the following path doesn't exist: $1" >&2
+    exit 1;
+  fi
+  echo "$path"
+}
 
 # this tries matching '[server_extensions]' and then looks for the first 'subjectAltName = DNS:<domain>' along the next lines
 AWK_PRG='
@@ -86,16 +98,20 @@ if ! [[ $PRE_SLEEP_WGE_CLIENT =~ ^[0-9]+[smhd]?$ ]]; then
   echo -e "\ninvalid sleep time..."
   exit 1
 fi
+TLS_DIR=$(check_path "$TLS_DIR")
+check_path "${TLS_DIR}/client.key"
+check_path "${TLS_DIR}/client.pem"
+CLIENT_DIR=$(check_path "$CLIENT_DIR")
 
 # check certs first, disable fail on non-zero return status
 hrule "Check Certs"
 set +e
-if ! (check_cert "tls/rootCA.pem" "tls/42_server.pem" && check_cert "tls/rootCA.pem" "tls/client.pem"); then
+if ! (check_cert "$TLS_DIR" "rootCA.pem" "42_server.pem" && check_cert "$TLS_DIR" "rootCA.pem" "client.pem"); then
   echo -e "\ngenerate new cert chain"
   check_continue
   make clean-tls all-tls
   # check again
-  if ! (check_cert "tls/rootCA.pem" "tls/42_server.pem" && check_cert "tls/rootCA.pem" "tls/client.pem"); then
+  if ! (check_cert "$TLS_DIR" "rootCA.pem" "42_server.pem" && check_cert "$TLS_DIR" "rootCA.pem" "client.pem"); then
     echo "\nsomething is wrong with cert generation... quiting..."
     exit 1
   fi
@@ -140,6 +156,7 @@ sed -i '/.*${DN}.*/d' /etc/hosts
 sed -i '$ {/^$/d}' /etc/hosts
 printf '\n%s\t%s' $INSTANCE_IP "$DN" >> /etc/hosts
 EOF
+    sleep 2s
   fi
 
   hrule "Nslookup Verification"
@@ -154,6 +171,6 @@ EOF
     echo "sleeping for ${PRE_SLEEP_WGE_CLIENT}, please wait..."
     sleep $PRE_SLEEP_WGE_CLIENT
   fi
-  wge-client -key "${CWD}/tls/client.key" -cert "${CWD}/tls/client.pem" -conf "${CWD}/client.toml" -endpoint "https://${DN}:${PORT}"
+  wge-client -key "${TLS_DIR}/client.key" -cert "${TLS_DIR}/client.pem" -conf "${CWD}/client.toml" -endpoint "https://${DN}:${PORT}"
   popd 1>/dev/null
 fi
