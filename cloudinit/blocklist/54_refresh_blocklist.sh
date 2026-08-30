@@ -3,9 +3,9 @@ set -eo pipefail
 
 # output redirection
 : ${LOG_FILE:="/var/log/refresh_blocklist"}
-exec 2>"$LOG_FILE" 1>&2
+exec 2>>"$LOG_FILE" 1>&2
 # for tracking purposes
-echo "started at $(date -Iseconds)"
+echo "#### started at $(date -Iseconds) ####"
 
 SCRIPT_DIR=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
 
@@ -29,7 +29,7 @@ function cleanup() {
   trap - EXIT SIGHUP SIGTERM SIGINT
   echo "cleaning up..."
   rm -f "$OUTPUT_TEMP"
-  echo "script exited with code: $exit_code"
+  echo -e "script exited with code: $exit_code\n"
   exit $exit_code
 }
 
@@ -78,12 +78,12 @@ if [[ $DENY_EXTRAS == "true" ]]; then
   ensure_spacing "$OUTPUT_TEMP"
 fi
 
-## force allow, might not work correctly...
+## force allow, might not work correctly... (only suffix matches are removed)
 # this will pick up every line from force allow file
 if [[ $FORCE_ALLOW == "true" ]]; then
   while IFS= read -r line; do
     echo "Force allowing ${line} ..."
-    sed -i '/^[^[:space:]]*'"$line"'[^[:space:]]*$/d' "$OUTPUT_TEMP"
+    sed -i -E '/^[[:space:]]*([a-zA-Z0-9-]+\.)*'"$line"'[[:space:]]*$/d' "$OUTPUT_TEMP"
   done < <(awk "$AWK_PRG" "$FORCE_ALLOW_FILE")
 fi
 

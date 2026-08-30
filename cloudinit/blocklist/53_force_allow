@@ -1,1 +1,2 @@
-# To remove exact urls that may/may not have been added into the blocklist from either deny_urls or deny_extras
+# To remove urls matched by suffix that may/may not have been added into the blocklist from either deny_urls or deny_extras
+# ex: somedn.com will remove somedn.com as well as a.somdn.com
