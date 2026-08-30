@@ -10,6 +10,7 @@ fi
 USER_CRON_TEMPLATE="/etc/cron.d/custom.template"
 REFRESH_BLOCKLIST_CRON_FILE="/etc/cron.d/dnscrypt_blocklist"
 REFRESH_BLOCKLIST_SCRIPT_FILE="/etc/blocklist/refresh_blocklist.sh"
+REFRESH_BLICKLIST_LOG_FILE="/var/log/refresh_blocklist.log"
 
 function disable_systemd_resolved() {
   # TODO: Need to make this atomic using traps
@@ -46,13 +47,13 @@ systemctl enable --now nftables.service
 modify_dnscrypt_config
 
 # trigger refresh_blocklist to populate the blocked-names.txt
-if DNSCRYPT_HOME="${DNSCRYPT_HOME}" "$REFRESH_BLOCKLIST_SCRIPT_FILE" ; then
+if OUTPUT_DIR="${DNSCRYPT_HOME}" "$REFRESH_BLOCKLIST_SCRIPT_FILE" >> "$REFRESH_BLICKLIST_LOG_FILE" 2>&1 ; then
   # if its successful, add it to the crontab to frequently refresh the blocklist
   # the DNSCRYPT_HOME is already present as crontab env variable. refer: 91_cloud_boothook.sh
   cp "$USER_CRON_TEMPLATE" "$REFRESH_BLOCKLIST_CRON_FILE"
   cat >> "$REFRESH_BLOCKLIST_CRON_FILE" << EOF
 
-0  *  *  *  *  root  (OUTPUT_DIR="$DNSCRYPT_HOME" "$REFRESH_BLOCKLIST_SCRIPT_FILE" && systemctl restart dnscrypt-proxy.service) >> /var/log/refresh_blocklist.log 2>&1
+0  *  *  *  *  root  (OUTPUT_DIR="$DNSCRYPT_HOME" "$REFRESH_BLOCKLIST_SCRIPT_FILE" && systemctl restart dnscrypt-proxy.service) >> "$REFRESH_BLICKLIST_LOG_FILE" 2>&1
 EOF
 
 else
