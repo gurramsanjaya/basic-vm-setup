@@ -10,7 +10,6 @@ fi
 USER_CRON_TEMPLATE="/etc/cron.d/custom.template"
 RB_CRON_FILE="/etc/cron.d/dnscrypt_blocklist"
 RB_SCRIPT_FILE="/etc/blocklist/refresh_blocklist.sh"
-RB_LOG_FILE="/var/log/refresh_blocklist.log"
 
 function disable_systemd_resolved() {
   # TODO: Need to make this atomic using traps
@@ -53,7 +52,7 @@ if OUTPUT_DIR="${DNSCRYPT_HOME}" "$RB_SCRIPT_FILE" ; then
   cp "$USER_CRON_TEMPLATE" "$RB_CRON_FILE"
   cat >> "$REFRESH_BLOCKLIST_CRON_FILE" << EOF
 
-0  *  *  *  *  root  LOG_FILE="$RB_LOG_FILE" OUTPUT_DIR="$DNSCRYPT_HOME" "$RB_SCRIPT_FILE" && ( systemctl restart dnscrypt-proxy.service >> "$RB_LOG_FILE" 2>&1 )
+0  *  *  *  *  root  OUTPUT_DIR="$DNSCRYPT_HOME" "$RB_SCRIPT_FILE" && systemctl restart dnscrypt-proxy.service )
 EOF
 
 else
