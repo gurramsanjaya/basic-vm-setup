@@ -86,7 +86,7 @@ variable "cloud_config_extra" {
     },
     {
       filename = "force_allow"
-      content_type = "text/x-custom-wge"
+      content_type = "text/x-custom-blocklist"
       content_file = "../cloudinit/blocklist/53_force_allow"
     },
     {
