@@ -7,8 +7,6 @@ if [ -f "$USER_VARS_FILE" ]; then
   . "$USER_VARS_FILE"
 fi
 
-set -x
-
 WGE_ETC_DIR="/etc/wge"
 WGE_NFT_ALLOW="${WGE_ETC_DIR}/wge_nft_allow.conf"
 WGE_NFT_DELETE="${WGE_ETC_DIR}/wge_nft_delete.conf"

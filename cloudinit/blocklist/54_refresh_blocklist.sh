@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+# output redirection
+: ${LOG_FILE:="/var/log/refresh_blocklist"}
+exec 2>"$LOG_FILE" 1>&2
+# for tracking purposes
+echo "started at $(date -Iseconds)"
+
 SCRIPT_DIR=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
 
 : ${OUTPUT_DIR:="$SCRIPT_DIR"} # dummy value
