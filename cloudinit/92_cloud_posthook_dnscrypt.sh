@@ -50,9 +50,9 @@ if OUTPUT_DIR="${DNSCRYPT_HOME}" "$RB_SCRIPT_FILE" ; then
   # if its successful, add it to the crontab to frequently refresh the blocklist
   # the DNSCRYPT_HOME is already present as crontab env variable. refer: 91_cloud_boothook.sh
   cp "$USER_CRON_TEMPLATE" "$RB_CRON_FILE"
-  cat >> "$REFRESH_BLOCKLIST_CRON_FILE" << EOF
+  cat >> "$RB_CRON_FILE" << EOF
 
-0  *  *  *  *  root  OUTPUT_DIR="$DNSCRYPT_HOME" "$RB_SCRIPT_FILE" && systemctl restart dnscrypt-proxy.service )
+0  *  *  *  *  root  OUTPUT_DIR="${DNSCRYPT_HOME}" "${RB_SCRIPT_FILE}" && systemctl restart dnscrypt-proxy.service
 EOF
 
 else
