@@ -35,7 +35,7 @@ function hrule() {
 
 # $1 - TLS_DIR, $2 - CA cert, $3 - cert
 function check_cert() {
-  echo -e "\nChecking cert - $2, with CA - $3:"
+  echo -e "\nChecking cert - $3, with CA - $2:"
   local cacert=$(readlink -e "$1/$2")
   local cert=$(readlink -e "$1/$3")
   openssl verify -CAfile "$cacert" "$cert" &&
